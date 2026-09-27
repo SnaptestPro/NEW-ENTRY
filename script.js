@@ -217,14 +217,15 @@ function renderShareholderTable() {
 
 $("btnAddShareholder").addEventListener("click", () => {
   if (!validate(["os_naam"])) { setStatus("रैयत का नाम आवश्यक है।"); return; }
+  const addrParts = [$("os_addr1").value.trim(), $("os_addr2").value.trim()].filter(Boolean);
   entries[currentIndex].tab2.shareholders.push({
     naam: $("os_naam").value.trim(),
     relation_type: $("os_relation_type").value,
     relation_naam: $("os_relation_naam").value.trim(),
     jaati: $("os_jaati").value,
-    addr: $("os_addr").value.trim()
+    addr: addrParts.join(", ")
   });
-  ["os_naam", "os_relation_naam", "os_addr"].forEach(id => $(id).value = "");
+  ["os_naam", "os_relation_naam", "os_addr1", "os_addr2"].forEach(id => $(id).value = "");
   persist();
   renderShareholderTable();
   setStatus("हिस्सेदार जोड़ा गया।");
@@ -308,7 +309,32 @@ $("btnNewEntry").addEventListener("click", () => {
   setStatus("नई प्रविष्टि शुरू करें।");
 });
 
+/* ---------- ऊपर की info-bar (ज़िला/अंचल/मौजा/टोला/हलका/थाना नं॰) ---------- */
+const META_KEY = "khesraMeta_v1";
+const metaIds = ["m_zila", "m_anchal", "m_mouja", "m_tola", "m_halka", "m_thana"];
+
+function loadMeta() {
+  const raw = localStorage.getItem(META_KEY);
+  if (!raw) return;
+  try {
+    const meta = JSON.parse(raw);
+    metaIds.forEach(id => { if (meta[id] !== undefined && $(id)) $(id).value = meta[id]; });
+  } catch (e) { /* ignore corrupt data */ }
+}
+
+function saveMeta() {
+  const meta = {};
+  metaIds.forEach(id => { if ($(id)) meta[id] = $(id).value; });
+  localStorage.setItem(META_KEY, JSON.stringify(meta));
+}
+
+metaIds.forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener("change", saveMeta);
+});
+
 /* ---------- शुरुआत ---------- */
+loadMeta();
 loadEntries();
 fillFormFromEntry(entries[currentIndex]);
 renderEntryTabs();

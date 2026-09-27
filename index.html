@@ -10,6 +10,48 @@
 
 <div class="app-wrap">
 
+  <!-- ===== Top info bar ===== -->
+  <div class="info-bar" id="infoBar">
+    <div class="info-item">
+      <label>ज़िला :</label>
+      <select class="info-plain" id="m_zila">
+        <option>सीतामढ़ी</option>
+        <option>मुजफ्फरपुर</option>
+        <option>दरभंगा</option>
+      </select>
+    </div>
+    <div class="info-item">
+      <label>अंचल :</label>
+      <select class="info-plain" id="m_anchal">
+        <option>रिगा</option>
+        <option>सीतामढ़ी</option>
+        <option>बेलसंड</option>
+      </select>
+    </div>
+    <div class="info-item">
+      <label>मौजा :</label>
+      <select class="info-boxed" id="m_mouja">
+        <option>Riga</option>
+        <option>Sonbarsa</option>
+        <option>Madhaul</option>
+      </select>
+    </div>
+    <div class="info-item">
+      <label>टोला :</label>
+      <select class="info-boxed" id="m_tola">
+        <option>--Select--</option>
+      </select>
+    </div>
+    <div class="info-item">
+      <label>हलका :</label>
+      <input type="text" class="info-plain mono" id="m_halka" value="13" size="3">
+    </div>
+    <div class="info-item">
+      <label>थाना नं॰ :</label>
+      <input type="text" class="info-plain mono" id="m_thana" value="247" size="4">
+    </div>
+  </div>
+
   <!-- ===== Top section tabs ===== -->
   <div class="top-tabs" id="topTabs">
     <div class="top-tab active" data-tab="t1">क्र.संख्या (1 से 8)</div>
@@ -33,7 +75,7 @@
         </div>
         <div class="field">
           <label>धारण का प्रकार <span class="req">*</span></label>
-          <select id="f_dharan_prakar">
+          <select id="f_dharan_prakar" class="fld-blue">
             <option value="">~~धारण का प्रकार चुनें~~</option>
             <option>रैयती</option>
             <option>सरकारी</option>
@@ -56,11 +98,12 @@
           </label>
           <input type="text" id="f_relation_naam">
         </div>
+        <div></div>
+
         <div class="field">
           <label>आधार नं॰</label>
           <input type="text" id="f_aadhar" maxlength="12" inputmode="numeric">
         </div>
-
         <div class="field">
           <label>रैयत का नाम अंग्रेज़ी में</label>
           <input type="text" id="f_raiyat_naam_en">
@@ -86,7 +129,6 @@
             </table>
           </div>
         </div>
-        <div></div>
       </div>
 
       <div class="grid2">
@@ -110,7 +152,7 @@
       <div class="grid3">
         <div class="field">
           <label>जाति</label>
-          <select id="f_jaati">
+          <select id="f_jaati" class="fld-blue">
             <option value="">~~ जाति चुनें ~~</option>
             <option>सामान्य</option>
             <option>पिछड़ा वर्ग</option>
@@ -152,9 +194,10 @@
         Note :अगर रकबा 1 एकड़ 25 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 25 या 25.0 |अगर रकबा 1 एकड़ 05 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 5 या 5.0 | अगर रकबा 1 एकड़ 50 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 50 या 50.0 |
       </div>
 
-      <div class="btn-row">
+      <div class="btn-row-grid">
         <button type="button" class="btn-save" id="btnSave1">Save</button>
         <button type="button" class="btn-next" data-next="t2">Next -&gt;</button>
+        <div></div>
       </div>
     </section>
 
@@ -172,7 +215,7 @@
         <div class="grid3">
           <div class="field">
             <label>रैयत का नाम <span class="req">*</span></label>
-            <input type="text" id="os_naam">
+            <input type="text" id="os_naam" class="fld-blue">
           </div>
           <div class="field">
             <label class="dropdown-label">
@@ -182,11 +225,11 @@
                 <option>अभिभावक का नाम</option>
               </select>
             </label>
-            <input type="text" id="os_relation_naam">
+            <input type="text" id="os_relation_naam" class="fld-blue">
           </div>
           <div class="field">
             <label>जाति</label>
-            <select id="os_jaati">
+            <select id="os_jaati" class="fld-blue">
               <option value="">~~ जाति चुनें ~~</option>
               <option>सामान्य</option>
               <option>पिछड़ा वर्ग</option>
@@ -199,7 +242,8 @@
         <div class="grid2">
           <div class="field">
             <label>पता</label>
-            <textarea id="os_addr" rows="2"></textarea>
+            <textarea id="os_addr1" rows="1" class="fld-blue"></textarea>
+            <textarea id="os_addr2" rows="1" class="fld-blue"></textarea>
           </div>
           <div class="field align-buttons">
             <button type="button" class="btn-add" id="btnAddShareholder">जोड़े</button>
