@@ -11,7 +11,6 @@ let currentIndex = 0;    // अभी कौन सी entry खुली है
 /* ---------- खाली entry का ढांचा ---------- */
 function blankEntry() {
   return {
-    header: { district: "", anchal: "", mauja: "", tola: "" },
     tab1: {
       khesra_no: "", ref_khesra_no: "", dharan_prakar: "",
       raiyat_naam: "", relation_type: "पिता का नाम", relation_naam: "",
@@ -49,12 +48,6 @@ function setStatus(msg) {
 
 /* ---------- फॉर्म को entry से भरना ---------- */
 function fillFormFromEntry(entry) {
-  // header
-  $("district").value = entry.header.district || $("district").value;
-  $("anchal").value = entry.header.anchal || $("anchal").value;
-  $("mauja").value = entry.header.mauja || $("mauja").value;
-  $("tola").value = entry.header.tola || $("tola").value;
-
   // tab1
   const t1 = entry.tab1;
   $("f_khesra_no").value = t1.khesra_no;
@@ -95,11 +88,6 @@ function fillFormFromEntry(entry) {
 /* ---------- फॉर्म से मौजूदा entry में डाटा उठाना ---------- */
 function readFormIntoEntry() {
   const entry = entries[currentIndex];
-
-  entry.header.district = $("district").value;
-  entry.header.anchal = $("anchal").value;
-  entry.header.mauja = $("mauja").value;
-  entry.header.tola = $("tola").value;
 
   const t1 = entry.tab1;
   t1.khesra_no = $("f_khesra_no").value.trim();

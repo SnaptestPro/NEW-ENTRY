@@ -28,27 +28,6 @@ body{
   overflow:hidden;
 }
 
-/* ---------- location header ---------- */
-.loc-bar{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:18px;
-  padding:10px 14px;
-  border-bottom:2px solid var(--green);
-}
-.loc-field{display:flex; align-items:center; gap:6px;}
-.loc-field label{font-weight:600; white-space:nowrap;}
-.loc-field select{
-  padding:3px 4px;
-  border:1px solid var(--border);
-  border-radius:2px;
-  background:#fff;
-}
-.loc-field .link-select{color:var(--link-blue);}
-.loc-field.static span{font-weight:600;}
-.link-text{color:var(--link-blue); text-decoration:underline; cursor:pointer;}
-
 /* ---------- top section tabs ---------- */
 .top-tabs{
   display:flex;
@@ -243,5 +222,4 @@ body{
 @media (max-width:760px){
   .grid3{grid-template-columns:1fr;}
   .grid2{grid-template-columns:1fr;}
-  .loc-bar{gap:10px;}
 }
