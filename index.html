@@ -3,349 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>खेसरा प्रविष्टि फॉर्म</title>
+<title>बँटवारा पंचनामा — अनुसूचि प्रपत्र</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="app-wrap">
-
-  <!-- ===== Header (DOCX ke upar wali line ke liye) ===== -->
-  <details class="header-box" open>
-    <summary>गाँव / थाना की जानकारी (बँटवारा DOCX के header में जाएगी)</summary>
-    <div class="grid3 header-grid">
-      <div class="field"><label>राजस्व ग्राम</label><input type="text" id="h_mauja"></div>
-      <div class="field"><label>थाना सांख्या</label><input type="text" id="h_thana_no"></div>
-      <div class="field"><label>अंचल</label><input type="text" id="h_anchal"></div>
-      <div class="field"><label>पुलिस थाना</label><input type="text" id="h_police_thana"></div>
-      <div class="field"><label>अनुमण्डल</label><input type="text" id="h_anumandal"></div>
-      <div class="field"><label>राजस्व थाना</label><input type="text" id="h_rajasva_thana"></div>
-      <div class="field"><label>जिला</label><input type="text" id="h_jila"></div>
-      <div class="field"><label>ग्राम पंचायत राज</label><input type="text" id="h_panchayat"></div>
-      <div class="field"><label>हल्का सांख्या</label><input type="text" id="h_halka"></div>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">बँ</div>
+    <div>
+      <h1>बँटवारा पंचनामा</h1>
+      <p>आपसी सहमति के आधार पर अनुसूचि प्रपत्र (Partition Schedule)</p>
     </div>
-  </details>
-
-  <!-- ===== Top section tabs ===== -->
-  <div class="top-tabs" id="topTabs">
-    <div class="top-tab active" data-tab="t1">क्र.संख्या (1 से 8)</div>
-    <div class="top-tab" data-tab="t2">अन्य हिस्सेदार हैं?</div>
-    <div class="top-tab" data-tab="t3">चौहद्दी (क्र.संख्या-9 -11)</div>
-    <div class="top-tab" data-tab="t4">क्र.संख्या- 12 से आगे</div>
   </div>
-
-  <div class="panel">
-
-    <!-- ===== TAB 1 : मुख्य प्रविष्टि (क्र.संख्या 1 से 8) ===== -->
-    <section class="tab-panel active" id="t1">
-      <div class="grid3">
-        <div class="field">
-          <label>नया खेसरा सं॰ <span class="req">*</span></label>
-          <input type="text" id="f_khesra_no">
-        </div>
-        <div class="field">
-          <label>Ref Khesra No</label>
-          <input type="text" id="f_ref_khesra_no">
-        </div>
-        <div class="field">
-          <label>धारण का प्रकार <span class="req">*</span></label>
-          <select id="f_dharan_prakar">
-            <option value="">~~धारण का प्रकार चुनें~~</option>
-            <option>रैयती</option>
-            <option>सरकारी</option>
-            <option>गैरमजरूआ आम</option>
-            <option>गैरमजरूआ खास</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>रैयत का नाम <span class="req">*</span></label>
-          <input type="text" id="f_raiyat_naam">
-        </div>
-        <div class="field">
-          <label class="dropdown-label">
-            <select id="f_relation_type">
-              <option>पिता का नाम</option>
-              <option>पति का नाम</option>
-              <option>अभिभावक का नाम</option>
-            </select>
-          </label>
-          <input type="text" id="f_relation_naam">
-        </div>
-        <div class="field">
-          <label>आधार नं॰</label>
-          <input type="text" id="f_aadhar" maxlength="12" inputmode="numeric">
-        </div>
-
-        <div class="field">
-          <label>रैयत का नाम अंग्रेज़ी में</label>
-          <input type="text" id="f_raiyat_naam_en">
-          <span class="hint">आधार के अनुसार</span>
-        </div>
-        <div class="field old-khata-field">
-          <label>&nbsp;</label>
-          <div class="old-khata-row">
-            <div>
-              <span class="mini-label">पुराना खाता सं॰</span>
-              <input type="text" id="f_purana_khata">
-            </div>
-            <div>
-              <span class="mini-label">पुराना खेसरा सं॰</span>
-              <input type="text" id="f_purana_khesra">
-            </div>
-            <button type="button" class="btn-add" id="btnAddOldKhata">जोड़े</button>
-          </div>
-          <div class="mini-table-wrap">
-            <table class="mini-table" id="oldKhataTable">
-              <thead><tr><th>पुराना खाता सं॰</th><th>पुराना खेसरा सं॰</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-        <div></div>
-      </div>
-
-      <div class="grid2">
-        <div class="field">
-          <label>पता <span class="req">*</span></label>
-          <textarea id="f_addr1" rows="1" placeholder="Address Line 1"></textarea>
-          <textarea id="f_addr2" rows="1" placeholder="Address Line 1"></textarea>
-        </div>
-        <div class="stacked">
-          <div class="field">
-            <label>पिन कोड <span class="req">*</span></label>
-            <input type="text" id="f_pin" maxlength="6" inputmode="numeric">
-          </div>
-          <div class="field">
-            <label>ईमेल आईडी</label>
-            <input type="email" id="f_email">
-          </div>
-        </div>
-      </div>
-
-      <div class="grid3">
-        <div class="field">
-          <label>जाति</label>
-          <select id="f_jaati">
-            <option value="">~~ जाति चुनें ~~</option>
-            <option>सामान्य</option>
-            <option>पिछड़ा वर्ग</option>
-            <option>अत्यंत पिछड़ा वर्ग</option>
-            <option>अनुसूचित जाति</option>
-            <option>अनुसूचित जनजाति</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Gender</label>
-          <select id="f_gender">
-            <option value="">--Select--</option>
-            <option>पुरुष</option>
-            <option>महिला</option>
-            <option>अन्य</option>
-          </select>
-        </div>
-        <div></div>
-      </div>
-
-      <div class="grid3">
-        <div class="field">
-          <label>जमाबंदी सं॰</label>
-          <input type="text" id="f_jamabandi">
-        </div>
-        <div class="field">
-          <label>नया खाता सं॰ (अनुसूचि के लिए)</label>
-          <input type="text" id="f_naya_khata">
-        </div>
-        <div class="field">
-          <label>मिन जानिब</label>
-          <input type="text" id="f_min_janib">
-        </div>
-        <div class="field">
-          <label>अभियुक्ति</label>
-          <input type="text" id="f_abhiyukti">
-        </div>
-        <div></div><div></div>
-      </div>
-
-      <div class="grid3">
-        <div class="field">
-          <label>रकबा <span class="req">*</span></label>
-          <span class="mini-label">एकड़</span>
-          <input type="number" step="1" min="0" id="f_ekad">
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <span class="mini-label">डेसीमल</span>
-          <input type="number" step="0.01" min="0" max="99.99" id="f_decimal">
-        </div>
-        <div class="field">
-          <label>मोबाइल नं॰ <span class="req">*</span></label>
-          <input type="text" id="f_mobile" maxlength="10" inputmode="numeric">
-        </div>
-      </div>
-
-      <div class="note-box">
-        Note :अगर रकबा 1 एकड़ 25 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 25 या 25.0 |अगर रकबा 1 एकड़ 05 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 5 या 5.0 | अगर रकबा 1 एकड़ 50 डेसीमल है तो इसप्रकार एंट्री करें - एकड़ में 1 और डेसीमल में 50 या 50.0 |
-      </div>
-
-      <div class="btn-row">
-        <button type="button" class="btn-save" id="btnSave1">Save</button>
-        <button type="button" class="btn-next" data-next="t2">Next -&gt;</button>
-      </div>
-    </section>
-
-    <!-- ===== TAB 2 : अन्य हिस्सेदार ===== -->
-    <section class="tab-panel" id="t2">
-      <div class="field inline-field">
-        <label>अन्य हिस्सेदार हैं ? </label>
-        <select id="f_has_other">
-          <option value="no">नहीं</option>
-          <option value="yes">हाँ</option>
-        </select>
-      </div>
-
-      <div id="otherShareholderForm" class="hidden">
-        <div class="grid3">
-          <div class="field">
-            <label>रैयत का नाम <span class="req">*</span></label>
-            <input type="text" id="os_naam">
-          </div>
-          <div class="field">
-            <label class="dropdown-label">
-              <select id="os_relation_type">
-                <option>पिता का नाम</option>
-                <option>पति का नाम</option>
-                <option>अभिभावक का नाम</option>
-              </select>
-            </label>
-            <input type="text" id="os_relation_naam">
-          </div>
-          <div class="field">
-            <label>जाति</label>
-            <select id="os_jaati">
-              <option value="">~~ जाति चुनें ~~</option>
-              <option>सामान्य</option>
-              <option>पिछड़ा वर्ग</option>
-              <option>अत्यंत पिछड़ा वर्ग</option>
-              <option>अनुसूचित जाति</option>
-              <option>अनुसूचित जनजाति</option>
-            </select>
-          </div>
-        </div>
-        <div class="share-box">
-          <div class="share-title">इस हिस्सेदार की अनुसूचि (बँटवारे में मिला हिस्सा)</div>
-          <div class="grid3">
-            <div class="field"><label>खाता सं॰</label><input type="text" id="os_khata"></div>
-            <div class="field"><label>खेसरा सं॰</label><input type="text" id="os_khesra"></div>
-            <div class="field"><label>मिन जानिब</label><input type="text" id="os_min_janib"></div>
-            <div class="field"><label>रकवा - एकड़</label><input type="number" step="1" min="0" id="os_ekad"></div>
-            <div class="field"><label>रकवा - डेसीमल</label><input type="number" step="0.01" min="0" max="99.99" id="os_decimal"></div>
-            <div></div>
-          </div>
-          <div class="grid3">
-            <div class="field"><label>चौहद्दी - उत्तर</label><input type="text" id="os_ch_north"></div>
-            <div class="field"><label>चौहद्दी - दक्षिण</label><input type="text" id="os_ch_south"></div>
-            <div class="field"><label>चौहद्दी - पूर्व</label><input type="text" id="os_ch_east"></div>
-            <div class="field"><label>चौहद्दी - पश्चिम</label><input type="text" id="os_ch_west"></div>
-            <div></div><div></div>
-          </div>
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <label>पता</label>
-            <textarea id="os_addr" rows="2"></textarea>
-          </div>
-          <div class="field align-buttons">
-            <button type="button" class="btn-add" id="btnAddShareholder">जोड़े</button>
-            <button type="button" class="btn-next" data-next="t3">Next -&gt;</button>
-          </div>
-        </div>
-
-        <div class="mini-table-wrap">
-          <table class="mini-table" id="shareholderTable">
-            <thead><tr><th>रैयत का नाम</th><th>संबंध</th><th>जाति</th><th>पता</th><th>खाता / खेसरा / रकवा</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== TAB 3 : चौहद्दी ===== -->
-    <section class="tab-panel" id="t3">
-      <table class="chauhaddi-table">
-        <thead><tr><th></th><th>चौहद्दी</th><th>Ref. Khesra No.</th></tr></thead>
-        <tbody>
-          <tr>
-            <td class="dir-label">उत्तर <span class="req">*</span></td>
-            <td><input type="text" id="ch_north"></td>
-            <td><input type="text" id="ch_north_ref"></td>
-          </tr>
-          <tr>
-            <td class="dir-label">दक्षिण <span class="req">*</span></td>
-            <td><input type="text" id="ch_south"></td>
-            <td><input type="text" id="ch_south_ref"></td>
-          </tr>
-          <tr>
-            <td class="dir-label">पूर्व <span class="req">*</span></td>
-            <td><input type="text" id="ch_east"></td>
-            <td><input type="text" id="ch_east_ref"></td>
-          </tr>
-          <tr>
-            <td class="dir-label">पश्चिम <span class="req">*</span></td>
-            <td><input type="text" id="ch_west"></td>
-            <td><input type="text" id="ch_west_ref"></td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="btn-row">
-        <button type="button" class="btn-save" id="btnFillChauhaddi">चौहद्दी भरे</button>
-        <button type="button" class="btn-next" data-next="t4">Next -&gt;</button>
-      </div>
-    </section>
-
-    <!-- ===== TAB 4 : क्र.संख्या 12 से आगे ===== -->
-    <section class="tab-panel" id="t4">
-      <div class="grid3">
-        <div class="field">
-          <label>खेसरा सं॰ (12 से आगे)</label>
-          <input type="text" id="f_extra_khesra">
-        </div>
-        <div class="field">
-          <label>Ref Khesra No</label>
-          <input type="text" id="f_extra_ref">
-        </div>
-        <div class="field align-buttons">
-          <label>&nbsp;</label>
-          <button type="button" class="btn-add" id="btnAddExtra">जोड़े</button>
-        </div>
-      </div>
-      <div class="mini-table-wrap">
-        <table class="mini-table" id="extraTable">
-          <thead><tr><th>खेसरा सं॰</th><th>Ref Khesra No</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="btn-row">
-        <button type="button" class="btn-save" id="btnSaveExtra">Save</button>
-      </div>
-    </section>
-
+  <div class="top-actions">
+    <span class="save-state" id="saveState">● स्वतः सेव चालू</span>
+    <button type="button" class="btn ghost" id="btnNew">नया फॉर्म</button>
+    <button type="button" class="btn primary" id="btnDownload">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+      DOCX डाउनलोड
+    </button>
   </div>
+</header>
 
-  <!-- ===== Bottom entry navigation ===== -->
-  <div class="entry-bar" id="entryBar">
-    <button type="button" class="btn-new-entry" id="btnNewEntry">New Entry</button>
-    <div class="entry-tabs" id="entryTabs"></div>
+<nav class="steps" id="steps"></nav>
+
+<main class="container">
+  <section id="panel"></section>
+</main>
+
+<footer class="navbar">
+  <div class="navbar-in">
+    <button type="button" class="btn ghost" id="btnBack">← पिछला</button>
+    <span class="step-label" id="stepLabel"></span>
+    <button type="button" class="btn primary" id="btnNext">अगला →</button>
   </div>
+</footer>
 
-  <div class="export-bar">
-    <button type="button" class="btn-save" id="btnExportAll">📄 बँटवारा DOCX डाउनलोड (सभी सेव entries)</button>
-    <button type="button" class="btn-next" id="btnExportCurrent">सिर्फ़ यह Tab का DOCX</button>
-  </div>
-
-  <div class="status-line" id="statusLine"></div>
-
-</div>
+<div id="toast" class="toast"></div>
 
 <script src="jszip.min.js"></script>
 <script src="batwara_template.js"></script>

@@ -113,6 +113,35 @@
     return out;
   }
 
+  /* ---------- text को cell की चौड़ाई के हिसाब से फ़िट करना ---------- */
+  function fit(lines, base) {
+    const L = Math.max.apply(null, lines.map((l) => String(l).length).concat([0]));
+    return L > 12 ? Math.max(base - 5, 10) : L > 7 ? Math.max(base - 3, 12) : base;
+  }
+  function rk(ac, dc) {
+    ac = String(ac == null ? "" : ac).trim(); dc = String(dc == null ? "" : dc).trim();
+    if (!ac && !dc) return "";
+    const n = parseFloat(dc);
+    return (ac || "0") + "-" + (isNaN(n) ? (dc || "0") : String(n));
+  }
+  const REL = { "पिता": "पिता", "पति": "पति", "अभिभावक": "अभिभावक" };
+  const DIRS = [["उ॰", "north"], ["द॰", "south"], ["पू॰", "east"], ["प॰", "west"]];
+  function chauLines(x) {
+    const out = [];
+    DIRS.forEach(([lab, k]) => {
+      const t = (x[k] || "").trim(), ref = (x[k + "_ref"] || "").trim();
+      if (t || ref) out.push(lab + " " + t + (ref ? " (खे॰ " + ref + ")" : ""));
+    });
+    return out;
+  }
+  const one = (v) => { v = String(v == null ? "" : v).trim(); return v ? [v] : []; };
+  function hasData(r) {
+    const f = ["name", "rel_naam", "addr", "jamabandi", "khata", "khesra", "k_ac", "k_dc", "n_ac", "n_dc", "abhiyukti"];
+    return f.some((k) => String(r[k] || "").trim()) ||
+      (r.sch || []).some((s) => Object.keys(s).some((k) => String(s[k] || "").trim()));
+  }
+  function chunk(arr, n) { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; }
+
   /* ---------- एक page की XML (template paragraph + overlay) ---------- */
   function buildPage(paraTemplate, ctx, pageNo) {
     let idx = -1;
@@ -120,9 +149,9 @@
       idx++;
       const si = SHAPE_SCHED_HDR.indexOf(idx);
       if (si >= 0) {
-        const owner = ctx.owners[si];
-        if (!owner) return m;
-        return m.split("...... बनाम्").join(owner.no + " बनाम् " + esc(owner.name));
+        const sc = ctx.schedules[si];
+        if (!sc) return m;
+        return m.split("...... बनाम्").join(sc.no + " बनाम् " + esc(sc.name));
       }
       if (idx === SHAPE_TOP_HDR) {
         const h = ctx.header;
@@ -137,166 +166,80 @@
       return m;
     });
 
-    /* ids को unique रखना */
     if (pageNo > 0) {
       xml = xml.replace(/_x0000_s(\d+)/g, (m, n) => "_x0000_s" + (Number(n) + pageNo * 3000));
-      xml = xml.replace(/ w14:(paraId|textId)="[^"]*"/g, "")
-               .replace(/ wp14:(anchorId|editId)="[^"]*"/g, "");
+      xml = xml.replace(/ w14:(paraId|textId)="[^"]*"/g, "").replace(/ wp14:(anchorId|editId)="[^"]*"/g, "");
     }
     let docPr = 0;
     xml = xml.replace(/<wp:docPr id="\d+"/g, () => '<wp:docPr id="' + (++docPr + pageNo * 200) + '"');
-    /* overlay ids (5000+) पहले से unique हैं */
 
-    /* ---- data cells ---- */
     let ov = "";
-    const rows = ctx.rows;
-    rows.forEach((row, r) => {
-      // बायाँ हिस्सा (मौताबिक जमाबंदी एवं खतियान)
-      if (row.name) ov += cell(LEFT[0], LEFT[1], r, row.name, { sz: 15, jc: "left", anchor: "t" });
-      if (row.jamabandi) ov += cell(LEFT[1], LEFT[2], r, [row.jamabandi], { sz: 16 });
-      if (row.oldKhata) ov += cell(LEFT[2], LEFT[3], r, row.oldKhata, { sz: 16 });
-      if (row.oldKhesra) ov += cell(LEFT[3], LEFT[4], r, row.oldKhesra, { sz: 16 });
-      if (row.totalRakba) {
-        ov += cell(LEFT[4], LEFT[5], r, [row.totalRakba], { sz: 15 });
-        ov += cell(LEFT[5], LEFT[6], r, [row.totalRakba], { sz: 15 });
+    ctx.rows.forEach((row, r) => {
+      if (row.name.length) {
+        const tot = row.name.join("").length;
+        ov += cell(LEFT[0], LEFT[1], r, row.name, { sz: tot > 70 ? 13 : 15, jc: "left", anchor: "t" });
       }
-      // तीन अनुसूचियाँ
-      ctx.owners.forEach((ow, s) => {
-        const cx = SCHED[s];
-        const d = row.byOwner[s] || {};
-        if (d.khata) ov += cell(cx[0], cx[1], r, [d.khata], { sz: 16 });
-        if (d.khesra) ov += cell(cx[1], cx[2], r, [d.khesra], { sz: 16 });
-        if (d.rakba) {
-          ov += cell(cx[2], cx[3], r, [d.rakba], { sz: 15 });
-          ov += cell(cx[3], cx[4], r, [d.rakba], { sz: 15 });
-        }
-        if (d.minJanib) ov += cell(cx[4], cx[5], r, [d.minJanib], { sz: 15 });
-        if (d.chauhaddi && d.chauhaddi.length) ov += cell(cx[5], cx[6], r, d.chauhaddi, { sz: 14, jc: "left" });
+      [[1, row.jamabandi], [2, row.khata], [3, row.khesra]].forEach(([c, v]) => {
+        if (v.length) ov += cell(LEFT[c], LEFT[c + 1], r, v, { sz: fit(v, 16) });
       });
-      if (row.abhiyukti) ov += cell(ABHI[0], ABHI[1], r, [row.abhiyukti], { sz: 15 });
+      if (row.k.length) ov += cell(LEFT[4], LEFT[5], r, row.k, { sz: fit(row.k, 16) });
+      if (row.n.length) ov += cell(LEFT[5], LEFT[6], r, row.n, { sz: fit(row.n, 16) });
+
+      ctx.schedules.forEach((sc, s) => {
+        const cx = SCHED[s], d = row.sch[s] || {};
+        if (d.khata && d.khata.length) ov += cell(cx[0], cx[1], r, d.khata, { sz: fit(d.khata, 16) });
+        if (d.khesra && d.khesra.length) ov += cell(cx[1], cx[2], r, d.khesra, { sz: fit(d.khesra, 16) });
+        if (d.k && d.k.length) ov += cell(cx[2], cx[3], r, d.k, { sz: fit(d.k, 16) });
+        if (d.n && d.n.length) ov += cell(cx[3], cx[4], r, d.n, { sz: fit(d.n, 16) });
+        if (d.min_janib && d.min_janib.length) ov += cell(cx[4], cx[5], r, d.min_janib, { sz: 15 });
+        if (d.ch && d.ch.length) ov += cell(cx[5], cx[6], r, d.ch, { sz: 14, jc: "left" });
+      });
+      if (row.abhiyukti.length) ov += cell(ABHI[0], ABHI[1], r, row.abhiyukti, { sz: 15 });
     });
 
     const last = xml.lastIndexOf("</w:p>");
     xml = xml.slice(0, last) + ov + xml.slice(last);
-    if (pageNo > 0) {
-      xml = xml.replace(/^(<w:p\b[^>]*>)/, "$1<w:pPr><w:pageBreakBefore/></w:pPr>");
-    }
+    if (pageNo > 0) xml = xml.replace(/^(<w:p\b[^>]*>)/, "$1<w:pPr><w:pageBreakBefore/></w:pPr>");
     return xml;
   }
 
-  /* ---------- entries → pages का data model ---------- */
-  const REL = { "पिता का नाम": "पिता", "पति का नाम": "पति", "अभिभावक का नाम": "अभिभावक" };
-  const DIRS = [["उ॰", "north"], ["द॰", "south"], ["पू॰", "east"], ["प॰", "west"]];
-
-  function chauhaddiLines(get) {
-    const out = [];
-    DIRS.forEach(([lab, key]) => {
-      const t = get(key), ref = get(key + "_ref");
-      if (t || ref) out.push(lab + " " + (t || "") + (ref ? " (" + ref + ")" : ""));
-    });
-    return out;
-  }
-
-  function entryHasData(e) {
-    const t = e.tab1 || {};
-    return !!(t.khesra_no || t.raiyat_naam);
-  }
-
-  function ownersOf(e) {
-    const t = e.tab1, list = [];
-    const mainRakba = toDec(t.ekad, t.decimal);
-    list.push({
-      name: t.raiyat_naam || "",
-      khata: t.naya_khata || "",
-      khesra: t.khesra_no || "",
-      rakbaDec: mainRakba,
-      minJanib: t.min_janib || "",
-      chauhaddi: chauhaddiLines((k) => (e.tab3 || {})[k] || "")
-    });
-    if (e.tab2 && e.tab2.hasOther === "yes") {
-      (e.tab2.shareholders || []).forEach((s) => {
-        list.push({
-          name: s.naam || "",
-          khata: s.khata || "",
-          khesra: s.khesra || "",
-          rakbaDec: toDec(s.ekad, s.decimal),
-          minJanib: s.min_janib || "",
-          chauhaddi: chauhaddiLines((k) => s["ch_" + k] || "")
-        });
-      });
-    }
-    return list;
-  }
-
-  function leftName(e) {
-    const t = e.tab1, lines = [];
-    if (t.raiyat_naam) lines.push(t.raiyat_naam);
-    if (t.relation_naam) lines.push((REL[t.relation_type] || "पिता") + "- " + t.relation_naam);
-    const addr = [t.addr1, t.addr2].filter(Boolean).join(", ");
-    if (addr) lines.push(addr + (t.pin ? " - " + t.pin : ""));
-    return lines;
-  }
-
-  function buildRows(e, owners) {
-    const t = e.tab1;
-    const totalDec = owners.reduce((a, o) => a + (o.rakbaDec || 0), 0);
-    const anyRakba = owners.some((o) => o.rakbaDec != null);
-    const old = t.oldKhataList || [];
-    const rows = [];
-    const first = {
-      name: leftName(e),
-      jamabandi: t.jamabandi || "",
-      oldKhata: old.map((o) => o.khata).filter(Boolean),
-      oldKhesra: old.length ? old.map((o) => o.khesra).filter(Boolean) : [t.ref_khesra_no || t.khesra_no].filter(Boolean),
-      totalRakba: anyRakba ? fmtDec(totalDec) : "",
-      abhiyukti: t.abhiyukti || "",
-      byOwner: owners.map((o) => ({
-        khata: o.khata, khesra: o.khesra,
-        rakba: o.rakbaDec != null ? fmtDec(o.rakbaDec) : "",
-        minJanib: o.minJanib, chauhaddi: o.chauhaddi
-      }))
+  /* ---------- form state -> page context ---------- */
+  function toCtxRow(r, sg) {
+    const nm = [];
+    if ((r.name || "").trim()) nm.push(r.name.trim());
+    if ((r.rel_naam || "").trim()) nm.push((REL[r.rel_type] || "पिता") + "- " + r.rel_naam.trim());
+    if ((r.addr || "").trim()) nm.push(r.addr.trim());
+    return {
+      name: nm,
+      jamabandi: one(r.jamabandi), khata: one(r.khata), khesra: one(r.khesra),
+      k: one(rk(r.k_ac, r.k_dc)), n: one(rk(r.n_ac, r.n_dc)),
+      abhiyukti: one(r.abhiyukti),
+      sch: sg.map((sc) => {
+        const x = (r.sch && r.sch[sc.idx]) || {};
+        return { khata: one(x.khata), khesra: one(x.khesra), k: one(rk(x.k_ac, x.k_dc)), n: one(rk(x.n_ac, x.n_dc)), min_janib: one(x.min_janib), ch: chauLines(x) };
+      })
     };
-    rows.push(first);
-    ((e.tab4 && e.tab4.extraList) || []).forEach((x) => {
-      rows.push({
-        oldKhesra: [x.ref || x.khesra].filter(Boolean),
-        byOwner: owners.map((o, i) => (i === 0 ? { khesra: x.khesra } : {}))
-      });
-    });
-    return rows;
-  }
-
-  function chunk(arr, n) {
-    const out = [];
-    for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-    return out;
   }
 
   /* ---------- main ---------- */
-  async function build(JSZip, templateB64, entries, header) {
+  async function build(JSZip, templateB64, st) {
     const zip = await JSZip.loadAsync(templateB64, { base64: true });
     let doc = await zip.file("word/document.xml").async("string");
-
     const bStart = doc.indexOf("<w:body>") + "<w:body>".length;
     const sectStart = doc.lastIndexOf("<w:sectPr");
     const paraTemplate = doc.slice(bStart, sectStart);
 
+    const rows = (st.rows || []).filter(hasData);
+    if (!rows.length) throw new Error("कम से कम एक पंक्ति में डाटा भरें।");
+    const scheds = (st.schedules || []).map((s, i) => ({ idx: i, no: i + 1, name: (s.name || "").trim() }));
+    if (!scheds.length) throw new Error("कम से कम एक अनुसूचि चाहिए।");
+
     const pages = [];
-    entries.filter(entryHasData).forEach((e) => {
-      const owners = ownersOf(e);
-      owners.forEach((o, i) => { o.no = i + 1; });
-      const rows = buildRows(e, owners);
-      chunk(owners, OWNERS_PER_PAGE).forEach((ownerChunk) => {
-        chunk(rows, ROWS_PER_PAGE).forEach((rowChunk) => {
-          const s0 = ownerChunk[0].no - 1;
-          const rc = rowChunk.map((r) => Object.assign({}, r, {
-            byOwner: ownerChunk.map((_, k) => r.byOwner[s0 + k] || {})
-          }));
-          pages.push({ owners: ownerChunk, rows: rc, header: header || {} });
-        });
+    chunk(rows, ROWS_PER_PAGE).forEach((rc) => {
+      chunk(scheds, OWNERS_PER_PAGE).forEach((sg) => {
+        pages.push({ header: st.header || {}, schedules: sg, rows: rc.map((r) => toCtxRow(r, sg)) });
       });
     });
-    if (!pages.length) throw new Error("कोई भरी हुई entry नहीं मिली।");
 
     _id = 5000; _rh = 251900000;
     const body = pages.map((p, i) => buildPage(paraTemplate, p, i)).join("");
