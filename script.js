@@ -266,6 +266,7 @@
 
   /* ---------- render ---------- */
   function render() {
+    document.body.dataset.step = ui.step;
     renderSteps();
     $("#panel").innerHTML = [panelHeader, panelSchedules, panelRows, panelReview][ui.step]();
   }
