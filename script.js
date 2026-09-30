@@ -17,7 +17,8 @@ function blankEntry() {
       aadhar: "", raiyat_naam_en: "",
       oldKhataList: [],
       addr1: "", addr2: "", pin: "", email: "",
-      jaati: "", gender: "", ekad: "", decimal: "", mobile: ""
+      jaati: "", gender: "", ekad: "", decimal: "", mobile: "",
+      jamabandi: "", naya_khata: "", min_janib: "", abhiyukti: ""
     },
     tab2: { hasOther: "no", shareholders: [] },
     tab3: { north: "", north_ref: "", south: "", south_ref: "", east: "", east_ref: "", west: "", west_ref: "" },
@@ -67,6 +68,10 @@ function fillFormFromEntry(entry) {
   $("f_ekad").value = t1.ekad;
   $("f_decimal").value = t1.decimal;
   $("f_mobile").value = t1.mobile;
+  $("f_jamabandi").value = t1.jamabandi || "";
+  $("f_naya_khata").value = t1.naya_khata || "";
+  $("f_min_janib").value = t1.min_janib || "";
+  $("f_abhiyukti").value = t1.abhiyukti || "";
   renderOldKhataTable();
 
   // tab2
@@ -107,6 +112,10 @@ function readFormIntoEntry() {
   t1.ekad = $("f_ekad").value;
   t1.decimal = $("f_decimal").value;
   t1.mobile = $("f_mobile").value.trim();
+  t1.jamabandi = $("f_jamabandi").value.trim();
+  t1.naya_khata = $("f_naya_khata").value.trim();
+  t1.min_janib = $("f_min_janib").value.trim();
+  t1.abhiyukti = $("f_abhiyukti").value.trim();
 
   entry.tab2.hasOther = $("f_has_other").value;
 
@@ -195,6 +204,17 @@ $("f_has_other").addEventListener("change", () => {
   persist();
 });
 
+function shareSummary(row) {
+  const parts = [];
+  if (row.khata) parts.push("खाता " + row.khata);
+  if (row.khesra) parts.push("खेसरा " + row.khesra);
+  if (row.ekad || row.decimal) parts.push("रकवा " + (row.ekad || 0) + "-" + (row.decimal || 0));
+  return parts.join(", ");
+}
+
+const SH_EXTRA_IDS = ["os_khata", "os_khesra", "os_min_janib", "os_ekad", "os_decimal",
+                      "os_ch_north", "os_ch_south", "os_ch_east", "os_ch_west"];
+
 function renderShareholderTable() {
   const tbody = $("shareholderTable").querySelector("tbody");
   const list = entries[currentIndex].tab2.shareholders;
@@ -203,6 +223,7 @@ function renderShareholderTable() {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${row.naam}</td><td>${row.relation_type}: ${row.relation_naam}</td>
       <td>${row.jaati}</td><td>${row.addr}</td>
+      <td>${shareSummary(row)}</td>
       <td class="remove-cell"><button class="remove-btn" data-i="${i}">✕</button></td>`;
     tbody.appendChild(tr);
   });
@@ -217,15 +238,23 @@ function renderShareholderTable() {
 
 $("btnAddShareholder").addEventListener("click", () => {
   if (!validate(["os_naam"])) { setStatus("रैयत का नाम आवश्यक है।"); return; }
-  const addrParts = [$("os_addr1").value.trim(), $("os_addr2").value.trim()].filter(Boolean);
   entries[currentIndex].tab2.shareholders.push({
     naam: $("os_naam").value.trim(),
     relation_type: $("os_relation_type").value,
     relation_naam: $("os_relation_naam").value.trim(),
     jaati: $("os_jaati").value,
-    addr: addrParts.join(", ")
+    addr: $("os_addr").value.trim(),
+    khata: $("os_khata").value.trim(),
+    khesra: $("os_khesra").value.trim(),
+    min_janib: $("os_min_janib").value.trim(),
+    ekad: $("os_ekad").value,
+    decimal: $("os_decimal").value,
+    ch_north: $("os_ch_north").value.trim(),
+    ch_south: $("os_ch_south").value.trim(),
+    ch_east: $("os_ch_east").value.trim(),
+    ch_west: $("os_ch_west").value.trim()
   });
-  ["os_naam", "os_relation_naam", "os_addr1", "os_addr2"].forEach(id => $(id).value = "");
+  ["os_naam", "os_relation_naam", "os_addr"].concat(SH_EXTRA_IDS).forEach(id => $(id).value = "");
   persist();
   renderShareholderTable();
   setStatus("हिस्सेदार जोड़ा गया।");
@@ -309,32 +338,56 @@ $("btnNewEntry").addEventListener("click", () => {
   setStatus("नई प्रविष्टि शुरू करें।");
 });
 
-/* ---------- ऊपर की info-bar (ज़िला/अंचल/मौजा/टोला/हलका/थाना नं॰) ---------- */
-const META_KEY = "khesraMeta_v1";
-const metaIds = ["m_zila", "m_anchal", "m_mouja", "m_tola", "m_halka", "m_thana"];
+/* ---------- गाँव / थाना header (सभी entries में एक जैसा) ---------- */
+const HEADER_KEY = "khesraHeader_v1";
+const HEADER_FIELDS = ["mauja", "thana_no", "anchal", "police_thana", "anumandal",
+                       "rajasva_thana", "jila", "panchayat", "halka"];
 
-function loadMeta() {
-  const raw = localStorage.getItem(META_KEY);
-  if (!raw) return;
-  try {
-    const meta = JSON.parse(raw);
-    metaIds.forEach(id => { if (meta[id] !== undefined && $(id)) $(id).value = meta[id]; });
-  } catch (e) { /* ignore corrupt data */ }
+function loadHeader() {
+  let h = {};
+  try { h = JSON.parse(localStorage.getItem(HEADER_KEY)) || {}; } catch (e) { h = {}; }
+  return h;
 }
-
-function saveMeta() {
-  const meta = {};
-  metaIds.forEach(id => { if ($(id)) meta[id] = $(id).value; });
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
+function readHeaderFromForm() {
+  const h = {};
+  HEADER_FIELDS.forEach(k => { h[k] = $("h_" + k).value.trim(); });
+  return h;
 }
-
-metaIds.forEach(id => {
-  const el = $(id);
-  if (el) el.addEventListener("change", saveMeta);
+HEADER_FIELDS.forEach(k => {
+  $("h_" + k).value = loadHeader()[k] || "";
+  $("h_" + k).addEventListener("input", () => {
+    localStorage.setItem(HEADER_KEY, JSON.stringify(readHeaderFromForm()));
+  });
 });
 
+/* ---------- बँटवारा DOCX export ---------- */
+async function exportDocx(onlyCurrent) {
+  readFormIntoEntry();
+  persist();
+  localStorage.setItem(HEADER_KEY, JSON.stringify(readHeaderFromForm()));
+  const list = onlyCurrent ? [entries[currentIndex]] : entries;
+  try {
+    const r = await BatwaraDocx.build(JSZip, BATWARA_TEMPLATE_B64, list, readHeaderFromForm());
+    const blob = await r.zip.generateAsync({
+      type: "blob",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      compression: "DEFLATE"
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "batwara_panchnama.docx";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    setStatus("DOCX तैयार (" + r.pageCount + " पेज)।");
+  } catch (err) {
+    setStatus("DOCX नहीं बना: " + err.message);
+  }
+}
+$("btnExportAll").addEventListener("click", () => exportDocx(false));
+$("btnExportCurrent").addEventListener("click", () => exportDocx(true));
+
 /* ---------- शुरुआत ---------- */
-loadMeta();
 loadEntries();
 fillFormFromEntry(entries[currentIndex]);
 renderEntryTabs();

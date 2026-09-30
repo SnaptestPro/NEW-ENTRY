@@ -31,3 +31,14 @@ phir browser me `http://localhost:8000` kholo.
 ## Customize karne ke liye
 - ज़िला/अंचल/मौजा/टोला/जाति/धारण-का-प्रकार ke dropdown options `index.html` me `<option>` tags me edit kar sakte ho.
 - Data sirf browser me (localStorage) save hota hai — agar server/database chahiye to backend alag se add karna hoga (ye pure static/offline version hai).
+
+## बँटवारा पंचनामा DOCX (naya feature)
+- Page ke upar "गाँव / थाना की जानकारी" bhar do (ek baar, sab entries me lagegi).
+- Har entry save karo. Neeche **"📄 बँटवारा DOCX डाउनलोड"** dabao — template (`batwara_template.js` me embedded) bhar kar `batwara_panchnama.docx` download hota hai.
+- Mapping:
+  - Baayein hisse (col 1-6): main raiyat ka naam/pita/pata, जमाबंदी सं॰, **पुराना** खाता/खेसरा, कुल रकवा (sab hisson ka jod).
+  - **Anusuchi 1** = main raiyat (नया खाता, नया खेसरा, रकवा, मिन जानिब, चौहद्दी tab ki).
+  - **Anusuchi 2, 3** = "अन्य हिस्सेदार" (हाँ) me jode gaye hissedar — har ek ki apni anusuchi (khata, khesra, rakba, min janib, chauhaddi).
+  - 3 se zyada hissedar ho to agla page apne aap banta hai; 5 se zyada khesra row (tab 12 se aage) ho to bhi.
+  - "क्र.संख्या 12 से आगे" wali khesra alag row me jaati hai.
+- Files: `jszip.min.js` (zip library), `batwara.js` (docx bharne ka code), `batwara_template.js` (template).
