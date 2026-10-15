@@ -300,7 +300,17 @@
     document.body.dataset.step = ui.step;
     renderSteps();
     $("#panel").innerHTML = [panelHeader, panelSchedules, panelRows, panelReview][ui.step]();
+    fitPreview();
   }
+  // result का नमूना: स्क्रीन की चौड़ाई में फिट (या पूरा असली आकार)
+  function fitPreview() {
+    $$(".pv-scroll").forEach((el) => {
+      const pw = Number(el.dataset.pw) || 1, z = el.closest(".pv-page").classList.contains("full") ? 1 : Math.min(1, (el.clientWidth - 2) / pw);
+      const zoomEl = $(".pv-zoom", el);
+      if (zoomEl) { zoomEl.style.zoom = z; }
+    });
+  }
+  window.addEventListener("resize", fitPreview);
   function updateLive() {
     if (ui.step === 0) { const el = $("#hdrPreview"); if (el) el.innerHTML = headerPreview(); }
     if (ui.step === 2) {
@@ -359,12 +369,21 @@
       if (!confirm("अनुसूचि " + (s + 1) + " और उसका सारा डाटा हट जाएगा। ठीक है?")) return;
       state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
+    else if (act === "pvToggle") { t.closest(".pv-page").classList.toggle("full"); fitPreview(); }
     else if (act === "download") download();
   });
 
   $("#btnNext").addEventListener("click", () => go(ui.step + 1));
   $("#btnBack").addEventListener("click", () => go(ui.step - 1));
   $("#btnDownload").addEventListener("click", download);
+  $("#btnDemo").addEventListener("click", () => {
+    const hasData = state.groups.some((g) => (g.name || "").trim() || g.plots.some(plotHasData)) || state.schedules.some((s) => (s.name || "").trim());
+    if (hasData && !confirm("अभी भरा हुआ डाटा हटकर डेमो डाटा आ जाएगा। ठीक है?")) return;
+    state = demoState();
+    ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    render(); window.scrollTo({ top: 0 }); toast("डेमो डाटा भर गया — नीचे नमूना देखें, फिर DOCX डाउनलोड करें।");
+  });
   $("#btnNew").addEventListener("click", () => {
     if (!confirm("सभी अनुसूचियाँ और पंक्तियाँ साफ़ हो जाएँगी (गाँव / थाना विवरण बचा रहेगा)। नया फॉर्म शुरू करें?")) return;
     const hd = state.header;
@@ -373,6 +392,43 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     render(); toast("नया फॉर्म तैयार है।");
   });
+
+  /* ---------- डेमो डाटा (एक क्लिक में पूरा फॉर्म) ---------- */
+  function demoState() {
+    const names = ["विष्णु कुमार", "सोनू कुमार", "चंदन कुमार", "ओमकार ठाकुर", "रमेश प्रसाद"];
+    const chau = { north: "आरी", north_ref: "233", south: "रास्ता", south_ref: "", east: "सोनू कुमार", east_ref: "236", west: "नहर", west_ref: "" };
+    // shares: {अनुसूचि-क्रम: डेसीमल}
+    const plot = (jam, khata, khesra, totalDec, shares, extra) => {
+      const p = blankPlot(5);
+      p.jamabandi = jam; p.khata = khata; p.khesra = khesra;
+      const ac = Math.floor(totalDec / 100), dc = totalDec - ac * 100;
+      p.k_ac = String(ac); p.k_dc = String(dc); p.n_ac = String(ac); p.n_dc = String(dc);
+      Object.keys(shares).forEach((k) => {
+        const d = shares[k], a = Math.floor(d / 100), c = d - a * 100;
+        Object.assign(p.sch[k], { khata: khata, khesra: khesra, k_ac: String(a), k_dc: String(c), n_ac: String(a), n_dc: String(c) });
+      });
+      return Object.assign(p, extra || {});
+    };
+    const g1 = { name: "राजेश कुमार शर्मा", rel_type: "पिता", rel_naam: "रामस्वरूप ठाकुर", addr: "ग्राम बखरी, पो० बखरी, सीतामढ़ी", plots: [
+      plot("1324", "56", "234", 120, { 0: 24, 1: 24, 2: 24, 3: 24, 4: 24 }),
+      plot("1324", "56", "235", 60, { 0: 20, 1: 20, 2: 20 }),
+      plot("1324", "56", "236", 50, { 3: 25, 4: 25 })
+    ] };
+    Object.assign(g1.plots[0].sch[0], chau, { min_janib: "पूरब" });
+    Object.assign(g1.plots[1].sch[1], { north: "आरी", north_ref: "234", south: "सड़क" });
+    const g2 = { name: "सुनीता देवी", rel_type: "पति", rel_naam: "अशोक साह", addr: "ग्राम बखरी, पो० बखरी, सीतामढ़ी", plots: [
+      plot("1325", "57", "310", 100, { 0: 40, 1: 30, 3: 30 }),
+      plot("1325", "57", "311", 25, { 4: 25 })
+    ] };
+    const g3 = { name: "मोहन यादव", rel_type: "पिता", rel_naam: "स्व० बालेश्वर यादव", addr: "ग्राम रीगा, पो० रीगा, सीतामढ़ी", plots: [
+      plot("1330", "61", "405", 75, { 0: 15, 1: 15, 2: 15, 3: 15, 4: 15 }, { abhiyukti: "वारिसान" })
+    ] };
+    Object.assign(g3.plots[0].sch[2], chau);
+    return normalize({
+      header: { panchayat: "गणेशपुर", halka: "रीगा", mauja: "बखरी", thana_no: "251", anchal: "रीगा", police_thana: "रीगा", anumandal: "सीतामढ़ी सदर", rajasva_thana: "सीतामढ़ी सदर", jila: "सीतामढ़ी" },
+      schedules: names.map((n) => ({ name: n })), groups: [g1, g2, g3]
+    });
+  }
 
   /* ---------- DOCX download ---------- */
   async function download() {

@@ -74,8 +74,16 @@
   }
 
   /* ---------- layout model (DOCX और preview दोनों इसी से बनते हैं) ---------- */
-  const W = { name: 2400, jam: 650, khata: 650, khesra: 650, k: 750, n: 750,
-              s_khata: 600, s_khesra: 600, s_k: 750, s_n: 750, s_min: 750, s_ch: 1350, abhi: 1000 };
+  const W = { name: 2000, jam: 700, khata: 680, khesra: 680, k: 760, n: 760,
+              s_khata: 680, s_khesra: 680, s_k: 760, s_n: 760, s_min: 700, s_ch: 1300, abhi: 900 };
+  const NB = "\u00a0";
+  const COMB = /[\u0900-\u0903\u093A-\u094F\u0951-\u0957\u0962\u0963]/g;
+  // शब्द cell में बीच से न टूटे — इसलिए सबसे लंबे शब्द के हिसाब से अक्षर का साइज़
+  function fitSz(lines, w, base, min) {
+    let L = 1;
+    (lines || []).forEach((l) => String(l).split(/[ ]+/).forEach((tok) => { L = Math.max(L, tok.replace(COMB, "").length); }));
+    return Math.max(min || 10, Math.min(base, Math.floor((w - 90) / (L * 5.6))));
+  }
 
   function layout(st) {
     const scheds = (st.schedules || []).map((s, i) => ({ idx: i, no: i + 1, name: t(s.name) }));
@@ -96,20 +104,20 @@
 
     const chunks = splitEven(scheds, MAX_SCHED_PER_PAGE).map((schedChunk) => {
       const cols = [];
-      cols.push({ id: "name", label: ["खतियानी रैयत का नाम व पता"], w: W.name });
+      cols.push({ id: "name", label: ["खतियानी रैयत का", "नाम व पता"], w: W.name });
       if (showLeft.jam) cols.push({ id: "jam", label: ["जमाबंदी", "सांख्या"], w: W.jam });
       if (showLeft.khata) cols.push({ id: "khata", label: ["खाता", "सांख्या"], w: W.khata });
       if (showLeft.khesra) cols.push({ id: "khesra", label: ["खेसरा", "सांख्या"], w: W.khesra });
-      if (showLeft.k) cols.push({ id: "k", label: ["खतियानी रकवा", "(ए० डी०)"], w: W.k });
-      if (showLeft.n) cols.push({ id: "n", label: ["नक्शा रकवा", "(ए० डी०)"], w: W.n });
+      if (showLeft.k) cols.push({ id: "k", label: ["खतियानी", "रकवा", "(ए०"+NB+"डी०)"], w: W.k });
+      if (showLeft.n) cols.push({ id: "n", label: ["नक्शा", "रकवा", "(ए०"+NB+"डी०)"], w: W.n });
       const nLeft = cols.length, blocks = [];
       schedChunk.forEach((sc) => {
         const sh = showSched[sc.idx], start = cols.length;
         if (sh.khata) cols.push({ id: "s_khata", s: sc.idx, label: ["खाता", "सांख्या"], w: W.s_khata });
         if (sh.khesra) cols.push({ id: "s_khesra", s: sc.idx, label: ["खेसरा", "सांख्या"], w: W.s_khesra });
-        if (sh.k) cols.push({ id: "s_k", s: sc.idx, label: ["खतियानी रकवा", "(ए० डी०)"], w: W.s_k });
-        if (sh.n) cols.push({ id: "s_n", s: sc.idx, label: ["नक्शा रकवा", "(ए० डी०)"], w: W.s_n });
-        if (sh.min) cols.push({ id: "s_min", s: sc.idx, label: ["मिन जानिब"], w: W.s_min });
+        if (sh.k) cols.push({ id: "s_k", s: sc.idx, label: ["खतियानी", "रकवा", "(ए०"+NB+"डी०)"], w: W.s_k });
+        if (sh.n) cols.push({ id: "s_n", s: sc.idx, label: ["नक्शा", "रकवा", "(ए०"+NB+"डी०)"], w: W.s_n });
+        if (sh.min) cols.push({ id: "s_min", s: sc.idx, label: ["मिन", "जानिब"], w: W.s_min });
         if (sh.ch) cols.push({ id: "s_ch", s: sc.idx, label: ["चौहद्दी"], w: W.s_ch, jc: "left" });
         blocks.push({ sc, start, span: cols.length - start });
       });
@@ -129,14 +137,13 @@
       if (raw > usable) cols.forEach((c) => { c.w = Math.floor(c.w * usable / raw); });
       const total = cols.reduce((a, c) => a + c.w, 0);
       const pageH = Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
-      // कॉलम ज़्यादा हों तो अक्षर थोड़े छोटे
-      const dsz = cols.length > 30 ? 3 : cols.length > 22 ? 2 : 0;
+      const wAt = (from, span) => cols.slice(from, from + span).reduce((a, c) => a + c.w, 0);
 
-      const hdr1 = [{ span: nLeft, lines: ["मोताविक जमाबंदी एवं मोताविक खतियान"], bold: true, shade: "F2F2F2" }];
-      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम् " + b.sc.name], bold: true, shade: "F2F2F2" }));
-      if (showAbhi) hdr1.push({ span: 1, lines: ["अभियुक्ति"], bold: true, shade: "F2F2F2", vm: "restart", head: 3 });
-      const hdr2 = cols.map((c) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: c.label, bold: true, small: 1 });
-      const hdr3 = cols.map((c, i) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: [String(i + 1)], small: 2 });
+      const hdr1 = [{ span: nLeft, lines: ["मोताविक जमाबंदी एवं मोताविक खतियान"], bold: true, shade: "F2F2F2", sz: 17 }];
+      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम् " + b.sc.name], bold: true, shade: "F2F2F2", sz: 16 }));
+      if (showAbhi) hdr1.push({ span: 1, lines: ["अभियुक्ति"], bold: true, shade: "F2F2F2", vm: "restart", head: 3, sz: 16 });
+      const hdr2 = cols.map((c) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: c.label, bold: true, sz: fitSz(c.label, c.w, 15, 11) });
+      const hdr3 = cols.map((c, i) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: [String(i + 1)], sz: 15 });
 
       const mergeState = (i, key, byGroup) => {
         const r = rows[i], prev = rows[i - 1], next = rows[i + 1];
@@ -162,9 +169,11 @@
           case "s_ch": cell.lines = r.sch[c.s].ch; cell.jc = "left"; cell.small = 2; break;
           case "abhi": cell.lines = one(r.abhiyukti); cell.small = 1; break;
         }
+        const base = c.id === "name" ? (cell.small ? 15 : 17) : c.id === "s_ch" ? 14 : (c.id === "s_min" || c.id === "abhi") ? 16 : 18;
+        cell.sz = fitSz(cell.lines, c.w, base, 10);
         return cell;
       }));
-      return { cols, total, pageW, pageH, dsz, headRows: [hdr1, hdr2, hdr3], bodyRows: body };
+      return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows: body };
     });
     return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length };
   }
@@ -183,7 +192,7 @@
 
   /* ---------- DOCX renderer ---------- */
   function run(text, sz, bold) {
-    return '<w:r><w:rPr><w:rFonts w:hint="cs"/>' + (bold ? "<w:b/><w:bCs/>" : "") +
+    return '<w:r><w:rPr><w:rFonts w:ascii="Mangal" w:hAnsi="Mangal" w:cs="Mangal" w:hint="cs"/>' + (bold ? "<w:b/><w:bCs/>" : "") +
       '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/><w:lang w:bidi="hi-IN"/></w:rPr><w:t xml:space="preserve">' + esc(text) + "</w:t></w:r>";
   }
   function para(text, sz, jc, bold, extra) {
@@ -192,9 +201,8 @@
   const sectPr = (c) => '<w:sectPr><w:pgSz w:w="' + c.pageW + '" w:h="' + c.pageH + '" w:orient="landscape"/>' +
     '<w:pgMar w:top="720" w:right="' + MARGIN + '" w:bottom="720" w:left="' + MARGIN + '" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>';
 
-  function docxCell(cell, w, dsz, isHead) {
-    const base = isHead ? 18 : 18;
-    const sz = Math.max(11, base - (cell.small || 0) * 1 - dsz);
+  function docxCell(cell, w) {
+    const sz = cell.sz || 18;
     let pr = '<w:tcW w:w="' + w + '" w:type="dxa"/>';
     if (cell.span > 1) pr += '<w:gridSpan w:val="' + cell.span + '"/>';
     if (cell.vm) pr += cell.vm === "restart" ? '<w:vMerge w:val="restart"/>' : "<w:vMerge/>";
@@ -208,7 +216,7 @@
     const wAt = (from, span) => ch.cols.slice(from, from + span).reduce((a, c) => a + c.w, 0);
     const rowXml = (cells, o) => {
       let pos = 0;
-      const xml = cells.map((cell) => { const w = wAt(pos, cell.span); pos += cell.span; return docxCell(cell, w, ch.dsz, o.hdr); }).join("");
+      const xml = cells.map((cell) => { const w = wAt(pos, cell.span); pos += cell.span; return docxCell(cell, w); }).join("");
       return "<w:tr><w:trPr><w:cantSplit/>" + (o.hdr ? "<w:tblHeader/>" : "") + (o.h ? '<w:trHeight w:val="' + o.h + '" w:hRule="atLeast"/>' : "") + "</w:trPr>" + xml + "</w:tr>";
     };
     return '<w:tbl><w:tblPr><w:tblW w:w="' + ch.total + '" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>' +
@@ -238,31 +246,23 @@
   /* ---------- HTML preview ---------- */
   function previewHtml(st) {
     const L = layout(st), hdr = headerLines(L.header);
+    const cellHtml = (tag, cell, rs) => "<" + tag + (cell.span > 1 ? ' colspan="' + cell.span + '"' : "") + (rs > 1 ? ' rowspan="' + rs + '"' : "") +
+      ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t" : "") + '" style="font-size:' + ((cell.sz || 18) / 2) + 'pt">' + cell.lines.map(esc).join("<br>") + "</" + tag + ">";
     return L.chunks.map((ch, ci) => {
-      const cg = "<colgroup>" + ch.cols.map((c) => '<col style="width:' + (c.w / ch.total * 100).toFixed(2) + '%">').join("") + "</colgroup>";
-      const tdr = (cells, tag) => {
-        let pos = 0;
-        return "<tr>" + cells.map((cell) => {
-          pos += cell.span;
-          if (cell.vm === "cont") return "";
-          const rs = cell.vm === "restart" ? (cell.head ? ' rowspan="' + cell.head + '"' : "") : "";
-          return "<" + tag + (cell.span > 1 ? ' colspan="' + cell.span + '"' : "") + rs + ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t " : "") + (cell.small ? "s" + cell.small : "") + '"' + ">" + cell.lines.map(esc).join("<br>") + "</" + tag + ">";
-        }).join("") + "</tr>";
-      };
-      // body rows: rowspan हिसाब से
-      const bodyRows = ch.bodyRows.map((cells, ri) => {
-        let out = "<tr>";
-        cells.forEach((cell, ci2) => {
-          if (cell.vm === "cont") return;
-          let rs = 1;
-          if (cell.vm === "restart") { for (let j = ri + 1; j < ch.bodyRows.length && ch.bodyRows[j][ci2].vm === "cont"; j++) rs++; }
-          out += "<td" + (rs > 1 ? ' rowspan="' + rs + '"' : "") + ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t " : "") + (cell.small ? "s" + cell.small : "") + '">' + cell.lines.map(esc).join("<br>") + "</td>";
-        });
-        return out + "</tr>";
-      }).join("");
-      return '<div class="pv-page"><div class="pv-cap">पेज ' + (ci + 1) + " / " + L.chunks.length + " · " + ch.cols.length + " कॉलम</div>" +
-        '<div class="pv-head">' + hdr.map((p) => '<div class="' + (p.jc === "center" ? "c" : "") + (p.bold ? " b" : "") + '">' + esc(p.text) + "</div>").join("") + "</div>" +
-        '<div class="pv-scroll"><table class="pv">' + cg + "<thead>" + tdr(ch.headRows[0], "th") + tdr(ch.headRows[1], "th") + tdr(ch.headRows[2], "th") + "</thead><tbody>" + bodyRows + "</tbody></table></div></div>";
+      const cg = "<colgroup>" + ch.cols.map((c) => '<col style="width:' + (c.w / 15).toFixed(1) + 'px">').join("") + "</colgroup>";
+      const head = ch.headRows.map((cells) => "<tr>" + cells.map((cell) => cell.vm === "cont" ? "" : cellHtml("th", cell, cell.head)).join("") + "</tr>").join("");
+      const bodyRows = ch.bodyRows.map((cells, ri) => "<tr>" + cells.map((cell, k) => {
+        if (cell.vm === "cont") return "";
+        let rs = 1;
+        if (cell.vm === "restart") { for (let j = ri + 1; j < ch.bodyRows.length && ch.bodyRows[j][k].vm === "cont"; j++) rs++; }
+        return cellHtml("td", cell, rs);
+      }).join("") + "</tr>").join("");
+      const pw = Math.round(ch.total / 15);
+      return '<div class="pv-page"><div class="pv-bar"><span class="pv-cap">पेज ' + (ci + 1) + " / " + L.chunks.length + " · " + ch.cols.length + ' कॉलम</span>' +
+        '<button type="button" class="btn ghost sm" data-act="pvToggle">पूरा आकार / स्क्रीन में फिट</button></div>' +
+        '<div class="pv-scroll" data-pw="' + pw + '"><div class="pv-zoom"><div class="pv-sheet" style="width:' + pw + 'px">' +
+        '<div class="pv-head">' + hdr.map((p) => '<div class="' + (p.jc === "center" ? "c" : "") + (p.bold ? " b" : "") + '" style="font-size:' + (p.sz / 2) + 'pt">' + esc(p.text) + "</div>").join("") + "</div>" +
+        '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table></div></div></div></div>";
     }).join("");
   }
 
