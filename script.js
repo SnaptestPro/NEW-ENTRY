@@ -197,43 +197,33 @@
     const n = g.plots.filter(plotHasData).length;
     return "<b>" + h(gName(g)) + "</b><small>" + (n ? n + " खेसरा पंक्ति" : "पंक्ति भरी नहीं") + "</small>";
   }
+  function schCard(gi, pi, k) {
+    const SP = "groups." + gi + ".plots." + pi + ".sch." + k + ".";
+    const sc = state.schedules[k], x = state.groups[gi].plots[pi].sch[k];
+    const has = Object.keys(x).some((q) => String(x[q] || "").trim());
+    const dirs = [["उत्तर", "north"], ["दक्षिण", "south"], ["पूर्व", "east"], ["पश्चिम", "west"]];
+    const chau = '<div class="chau">' + dirs.map((d) => '<span class="dir">' + d[0] + "</span>" +
+      '<input type="text" placeholder="नाम" data-p="' + SP + d[1] + '" value="' + h(getP(SP + d[1])) + '">' +
+      '<input type="text" placeholder="खेसरा" data-p="' + SP + d[1] + '_ref" value="' + h(getP(SP + d[1] + "_ref")) + '">').join("") + "</div>";
+    return '<div class="sch-card c' + (k % 5) + (has ? " filled" : "") + '"><div class="sch-card-h"><b>' + (k + 1) + "</b><span>" + (h(sc.name) || "अनुसूचि " + (k + 1)) + "</span></div>" +
+      '<div class="sch-card-b"><div class="mini2">' +
+      fld(SP + "khata", "खाता") + fld(SP + "khesra", "खेसरा") + "</div>" +
+      rk(SP + "k_ac", SP + "k_dc", "खतियानी रकवा", "sm") + rk(SP + "n_ac", SP + "n_dc", "नक्शा रकवा", "sm") +
+      fld(SP + "min_janib", "मिन जानिब") +
+      '<details class="chau-box"' + (/north|south|east|west/.test(Object.keys(x).filter((q) => String(x[q] || "").trim()).join()) ? " open" : "") + "><summary>चौहद्दी (उ॰ द॰ पू॰ प॰)</summary>" + chau + "</details></div></div>";
+  }
   function plotForm(gi, pi, r) {
     const P = "groups." + gi + ".plots." + pi + ".";
     const key = gi + "-" + pi;
-    const sIdx = Math.min(ui.schTab[key] || 0, state.schedules.length - 1);
-    const SP = P + "sch." + sIdx + ".";
-    const pills = state.schedules.map((s, k) =>
-      '<button type="button" class="pill ' + (k === sIdx ? "on" : "") + '" data-act="schTab" data-g="' + gi + '" data-p="' + pi + '" data-s="' + k + '">अनुसूचि ' + (k + 1) + (s.name ? " — " + h(s.name) : "") + "</button>").join("");
-    const dirs = [["उत्तर", "north"], ["दक्षिण", "south"], ["पूर्व", "east"], ["पश्चिम", "west"]];
-    const chau = '<div class="chau"><span class="head"></span><span class="head">चौहद्दी (नाम)</span><span class="head">Ref. खेसरा सं॰</span>' +
-      dirs.map((d) => '<span class="dir">' + d[0] + "</span>" +
-        '<input type="text" data-p="' + SP + d[1] + '" value="' + h(getP(SP + d[1])) + '">' +
-        '<input type="text" data-p="' + SP + d[1] + '_ref" value="' + h(getP(SP + d[1] + "_ref")) + '">').join("") + "</div>";
-
     return '<div class="row-body">' +
-      '<div class="sec"><div class="sec-t">जमाबंदी / खाता / खेसरा <small>कॉलम 2 – 6</small></div><div class="grid g4">' +
-      fld(P + "jamabandi", "जमाबंदी सांख्या", { sub: "कॉलम 2" }) +
-      fld(P + "khata", "खाता सांख्या", { sub: "कॉलम 3" }) +
-      fld(P + "khesra", "खेसरा सांख्या", { sub: "कॉलम 4" }) +
-      "<div></div>" +
-      rk(P + "k_ac", P + "k_dc", "खतियानी रकवा (ए० डी०) — कॉलम 5", "span2") +
-      rk(P + "n_ac", P + "n_dc", "नक्शा रकवा (ए० डी०) — कॉलम 6", "span2") +
+      '<div class="sec"><div class="sec-t">जमाबंदी · खाता · खेसरा · कुल रकवा <small>रैयत के नाम के सामने की कॉलम</small></div><div class="grid g5">' +
+      fld(P + "jamabandi", "जमाबंदी सांख्या") + fld(P + "khata", "खाता सांख्या") + fld(P + "khesra", "खेसरा सांख्या") +
+      rk(P + "k_ac", P + "k_dc", "खतियानी रकवा", "sm") + rk(P + "n_ac", P + "n_dc", "नक्शा रकवा", "sm") +
       "</div></div>" +
-
-      '<div class="sec"><div class="sec-t">अनुसूचि-वार बँटवारा <small>सिर्फ़ जिस अनुसूचि में हिस्सा है वही भरें</small></div>' +
-      '<div class="pills">' + pills + "</div>" +
-      '<div class="grid g4">' +
-      fld(SP + "khata", "खाता सांख्या", { sub: "अनुसूचि " + (sIdx + 1) }) +
-      fld(SP + "khesra", "खेसरा सांख्या") +
-      fld(SP + "min_janib", "मिन जानिब", { cls: "span2" }) +
-      rk(SP + "k_ac", SP + "k_dc", "खतियानी रकवा (ए० डी०)", "span2") +
-      rk(SP + "n_ac", SP + "n_dc", "नक्शा रकवा (ए० डी०)", "span2") +
-      '<div class="span4"><div class="fld"><span>चौहद्दी</span></div>' + chau + "</div>" +
-      "</div>" +
+      '<div class="sec"><div class="sec-t">अनुसूचि-वार बँटवारा <small>जिस अनुसूचि में हिस्सा नहीं है उसे खाली छोड़ दें</small></div>' +
+      '<div class="sch-grid">' + state.schedules.map((_, k) => schCard(gi, pi, k)).join("") + "</div>" +
       '<div class="bal" data-bal="' + key + '">' + balHtml(r) + "</div></div>" +
-
-      '<div class="sec"><div class="sec-t">अभियुक्ति <small>वैकल्पिक</small></div><div class="grid g2">' +
-      fld(P + "abhiyukti", "अभियुक्ति", { cls: "span2" }) + "</div></div></div>";
+      '<div class="sec"><div class="grid g2">' + fld(P + "abhiyukti", "अभियुक्ति (वैकल्पिक)", { cls: "span2" }) + "</div></div></div>";
   }
   function panelRows() {
     const cards = state.groups.map((g, gi) => {
@@ -286,19 +276,22 @@
       flat.forEach((x) => { const s = status(x.p); if (s.cls === "warn") { bad++; checks.push(["warn", gName(x.g) + " / खेसरा " + (x.p.khesra || x.pi + 1) + ": " + s.txt.replace("⚠ ", "")]); } });
       if (!bad) checks.push(["ok", "सभी पंक्तियों का रकवा मिलान सही है।"]);
     }
-    const pages = Math.ceil(state.schedules.length / 3);
+    const pages = Math.ceil(state.schedules.length / 5);
     const trs = flat.map((x, i) => {
       const r = x.p, s = status(r), k = toD(r.k_ac, r.k_dc), n = toD(r.n_ac, r.n_dc);
       return "<tr><td>" + (i + 1) + "</td><td><b>" + h(x.pi === 0 ? x.g.name : "〃") + "</b><br><small>" + h(x.pi === 0 && x.g.rel_naam ? x.g.rel_type + ": " + x.g.rel_naam : "") + "</small></td>" +
         "<td>" + h(r.jamabandi) + "</td><td>" + h(r.khata) + "</td><td>" + h(r.khesra) + "</td>" +
         "<td>" + (k == null ? "—" : fmtD(k)) + "</td><td>" + (n == null ? "—" : fmtD(n)) + '</td><td><span class="badge ' + s.cls + '">' + s.txt + "</span></td></tr>";
     }).join("");
+    let preview = "";
+    try { preview = flat.length ? BatwaraDocx.previewHtml(state) : ""; } catch (e) { preview = ""; }
     return '<div class="card"><div class="card-h"><div><h2>जाँच</h2><div class="hint">डाउनलोड से पहले एक बार मिलान देख लें (चेतावनी होने पर भी DOCX बन सकता है)।</div></div></div>' +
       '<div class="card-b"><ul class="checks">' + checks.map((c) => '<li class="' + c[0] + '"><span>' + (c[0] === "ok" ? "✓" : c[0] === "warn" ? "⚠" : "✕") + "</span><span>" + h(c[1]) + "</span></li>").join("") + "</ul></div></div>" +
+      (preview ? '<div class="card"><div class="card-h"><div><h2>रिज़ल्ट का नमूना (DOCX ऐसा ही बनेगा)</h2><div class="hint">खाली कॉलम नहीं दिखते · रैयत का नाम एक बार · पेज का साइज़ कॉलम के हिसाब से अपने-आप</div></div></div><div class="card-b">' + preview + "</div></div>" : "") +
       '<div class="card"><div class="card-h"><h2>पंक्तियों का सार</h2></div><div class="card-b tbl-wrap">' +
       (flat.length ? '<table class="tbl"><thead><tr><th>क्र.</th><th>रैयत</th><th>जमाबंदी</th><th>खाता</th><th>खेसरा</th><th>खतियानी रकवा</th><th>नक्शा रकवा</th><th>बँटवारा</th></tr></thead><tbody>' + trs + "</tbody></table>" : "<p>कोई पंक्ति नहीं।</p>") +
       "</div></div>" +
-      '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + flat.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · " + pages + " पेज (A3 landscape, हर पेज पर अधिकतम 3 अनुसूचि)</p></div>" +
+      '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + flat.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · " + pages + " पेज (एक पेज पर अधिकतम 5 अनुसूचि, पेज का साइज़ अपने-आप)</p></div>" +
       '<button type="button" class="btn primary lg" data-act="download">⬇ DOCX डाउनलोड करें</button></div></div>';
   }
 
@@ -344,7 +337,6 @@
     if (act === "step") go(i);
     else if (act === "toggleGroup") { ui.openGroup = ui.openGroup === gi ? -1 : gi; render(); }
     else if (act === "togglePlot") { ui.openPlot[gi] = ui.openPlot[gi] === pi ? -1 : pi; render(); }
-    else if (act === "schTab") { ui.schTab[gi + "-" + pi] = s; render(); }
     else if (act === "addGroup") { state.groups.push(blankGroup(n)); ui.openGroup = state.groups.length - 1; ui.openPlot[ui.openGroup] = 0; save(); render(); }
     else if (act === "addPlot") {
       const g = state.groups[gi], prev = g.plots[g.plots.length - 1];
