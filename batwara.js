@@ -79,12 +79,14 @@
   const NB = "\u00a0";
   const COMB = /[\u0900-\u0903\u093A-\u094F\u0951-\u0957\u0962\u0963]/g;
   // शब्द cell में बीच से न टूटे — इसलिए सबसे लंबे शब्द के हिसाब से अक्षर का साइज़
-  function fitSz(lines, w, base, min) {
+  function fitSz(lines, w, base, min, f) {
     let L = 1;
     (lines || []).forEach((l) => String(l).split(/[ ]+/).forEach((tok) => { L = Math.max(L, tok.replace(COMB, "").length); }));
-    return Math.max(min || 10, Math.min(base, Math.floor((w - 90) / (L * 5.6))));
+    return Math.max(min || 10, Math.min(base, Math.floor((w - 90) / (L * (f || 5.8)))));
   }
 
+  const PAL = [["BDD7EE", "DDEBF7"], ["C6E0B4", "E2EFDA"], ["FFE699", "FFF2CC"], ["F8CBAD", "FCE4D6"], ["D9C3F0", "EDE1F7"]];
+  const PAL_LEFT = ["B4C6E7", "D9E2F3"], PAL_ABHI = ["D0CECE", "EDEDED"];
   function layout(st) {
     const scheds = (st.schedules || []).map((s, i) => ({ idx: i, no: i + 1, name: t(s.name) }));
     if (!scheds.length) throw new Error("कम से कम एक अनुसूचि चाहिए।");
@@ -119,9 +121,10 @@
         if (sh.n) cols.push({ id: "s_n", s: sc.idx, label: ["नक्शा", "रकवा", "(ए०"+NB+"डी०)"], w: W.s_n });
         if (sh.min) cols.push({ id: "s_min", s: sc.idx, label: ["मिन", "जानिब"], w: W.s_min });
         if (sh.ch) cols.push({ id: "s_ch", s: sc.idx, label: ["चौहद्दी"], w: W.s_ch, jc: "left" });
+        cols.slice(start).forEach((c) => { c.blk = sc.idx % 5; });
         blocks.push({ sc, start, span: cols.length - start });
       });
-      if (showAbhi) cols.push({ id: "abhi", label: ["अभियुक्ति"], w: W.abhi });
+      if (showAbhi) cols.push({ id: "abhi", label: ["अभियुक्ति"], w: W.abhi, blk: -2 });
 
       // पेज की चौड़ाई: कॉलम जितने, पेज उतना (A4 landscape से 22 इंच तक)
       const natural = cols.reduce((a, c) => a + c.w, 0);
@@ -139,11 +142,13 @@
       const pageH = Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
       const wAt = (from, span) => cols.slice(from, from + span).reduce((a, c) => a + c.w, 0);
 
-      const hdr1 = [{ span: nLeft, lines: ["मोताविक जमाबंदी एवं मोताविक खतियान"], bold: true, shade: "F2F2F2", sz: 17 }];
-      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम् " + b.sc.name], bold: true, shade: "F2F2F2", sz: 16 }));
-      if (showAbhi) hdr1.push({ span: 1, lines: ["अभियुक्ति"], bold: true, shade: "F2F2F2", vm: "restart", head: 3, sz: 16 });
-      const hdr2 = cols.map((c) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: c.label, bold: true, sz: fitSz(c.label, c.w, 15, 11) });
-      const hdr3 = cols.map((c, i) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont" } : { span: 1, lines: [String(i + 1)], sz: 15 });
+      const palOf = (c, dark) => c.blk === undefined ? PAL_LEFT[dark ? 0 : 1] : c.blk === -2 ? PAL_ABHI[dark ? 0 : 1] : PAL[c.blk][dark ? 0 : 1];
+      const labelSz = Math.min.apply(null, cols.filter((c) => c.id !== "abhi").map((c) => fitSz(c.label, c.w, 22, 11)));
+      const hdr1 = [{ span: nLeft, lines: ["मोताविक जमाबंदी एवं मोताविक खतियान"], bold: true, shade: PAL_LEFT[0], sz: 20 }];
+      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम् " + b.sc.name], bold: true, shade: PAL[b.sc.idx % 5][0], sz: 19 }));
+      if (showAbhi) hdr1.push({ span: 1, lines: ["अभियुक्ति"], bold: true, shade: PAL_ABHI[0], vm: "restart", head: 3, sz: 19 });
+      const hdr2 = cols.map((c) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont", shade: PAL_ABHI[0] } : { span: 1, lines: c.label, bold: true, shade: palOf(c, false), sz: labelSz });
+      const hdr3 = cols.map((c, i) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont", shade: PAL_ABHI[0] } : { span: 1, lines: [String(i + 1)], shade: "F2F2F2", sz: Math.max(11, labelSz - 4) });
 
       const mergeState = (i, key, byGroup) => {
         const r = rows[i], prev = rows[i - 1], next = rows[i + 1];
@@ -152,10 +157,10 @@
         if (eq(next)) return "restart";
         return null;
       };
-      const body = rows.map((r, i) => cols.map((c) => {
+      const bodyRows = rows.map((r, i) => cols.map((c) => {
         const cell = { span: 1, lines: [] };
         switch (c.id) {
-          case "name": cell.vm = mergeState(i, "name", true); cell.lines = cell.vm === "cont" ? [] : r.nameLines; cell.jc = "left"; cell.va = "top"; cell.small = r.nameLines.join("").length > 70 ? 1 : 0; break;
+          case "name": cell.vm = mergeState(i, "name", true); cell.lines = cell.vm === "cont" ? [] : r.nameLines; cell.jc = "left"; cell.va = "top"; break;
           case "jam": cell.vm = mergeState(i, "jamabandi"); cell.lines = cell.vm === "cont" ? [] : one(r.jamabandi); break;
           case "khata": cell.vm = mergeState(i, "khata"); cell.lines = cell.vm === "cont" ? [] : one(r.khata); break;
           case "khesra": cell.lines = one(r.khesra); break;
@@ -165,41 +170,72 @@
           case "s_khesra": cell.lines = one(r.sch[c.s].khesra); break;
           case "s_k": cell.lines = one(r.sch[c.s].k); break;
           case "s_n": cell.lines = one(r.sch[c.s].n); break;
-          case "s_min": cell.lines = one(r.sch[c.s].min_janib); cell.small = 1; break;
-          case "s_ch": cell.lines = r.sch[c.s].ch; cell.jc = "left"; cell.small = 2; break;
-          case "abhi": cell.lines = one(r.abhiyukti); cell.small = 1; break;
+          case "s_min": cell.lines = one(r.sch[c.s].min_janib); break;
+          case "s_ch": cell.lines = r.sch[c.s].ch; cell.jc = "left"; break;
+          case "abhi": cell.lines = one(r.abhiyukti); break;
         }
-        const base = c.id === "name" ? (cell.small ? 15 : 17) : c.id === "s_ch" ? 14 : (c.id === "s_min" || c.id === "abhi") ? 16 : 18;
-        cell.sz = fitSz(cell.lines, c.w, base, 10);
         return cell;
       }));
-      return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows: body };
+      // एक जैसे अक्षर-साइज़: संख्या वाले सारे कॉलम एक साइज़, बाकी अपने-अपने
+      const NUM = ["jam", "khata", "khesra", "k", "n", "s_khata", "s_khesra", "s_k", "s_n"];
+      const colLines = (ci) => [].concat.apply([], bodyRows.map((r) => r[ci].lines));
+      const numSz = Math.min.apply(null, [24].concat(cols.map((c, ci) => NUM.indexOf(c.id) >= 0 ? fitSz(colLines(ci), c.w, 24, 12, 7.2) : 24)));
+      cols.forEach((c, ci) => {
+        const base = c.id === "name" ? 20 : c.id === "s_ch" ? 16 : c.id === "s_min" ? 19 : c.id === "abhi" ? 19 : numSz;
+        const sz = NUM.indexOf(c.id) >= 0 ? numSz : fitSz(colLines(ci), c.w, base, 10);
+        bodyRows.forEach((r) => { r[ci].sz = sz; });
+      });
+      bodyRows.forEach((r) => { r.forEach((cell, ci) => { if (cols[ci].id === "name") cell.boldFirst = true; }); });
+      return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows };
     });
     return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length };
   }
 
-  /* ---------- पेज के ऊपर की पंक्तियाँ (text) ---------- */
-  function headerLines(h) {
-    const g = (k) => t(h[k]) || "………………";
-    return [
-      { text: "पंचनामा बँटवारा ( Schedule )", sz: 26, jc: "center", bold: true },
-      { text: "आपसी सहमति के आधार पर बँटवारा ( Partition ) का अनुसूचि प्रपत्र , ग्राम पंचायत राज " + g("panchayat") + " , हल्का सांख्या " + g("halka"), sz: 22, jc: "center" },
-      { text: "स्थल पर दखल-कब्जा एवं जमाबंदी रकवा से मिलान कर खतियानी रकवा का जमाबंदी बँटवारा", sz: 22, jc: "center" },
-      { text: "राजस्व ग्राम " + g("mauja") + " , थाना सांख्या " + g("thana_no") + " , अंचल " + g("anchal") + " , पुलिस थाना " + g("police_thana") +
-        " , अनुमण्डल " + g("anumandal") + " , राजस्व थाना " + g("rajasva_thana") + " , जिला " + g("jila"), sz: 20, jc: "left" }
+  /* ---------- पेज के ऊपर का शीर्षक-खंड ---------- */
+  // पेज जितना चौड़ा, अक्षर उतने बड़े (A3 = 1.0)
+  function headerBlock(h, pageW) {
+    const k = Math.max(0.8, Math.min(1.45, pageW / 23814));
+    const S = (v) => Math.round(v * k / 2) * 2;
+    const val = (key) => t(h[key]) ? { t: t(h[key]), b: true } : { t: "………………" };
+    const lab = (x) => ({ t: x });
+    const paras = [
+      { runs: [{ t: "पंचनामा बँटवारा ( Schedule )", b: true }], sz: S(36), jc: "center", rule: true },
+      { runs: [{ t: "आपसी सहमति के आधार पर बँटवारा ( Partition ) का अनुसूचि प्रपत्र", b: true }], sz: S(24), jc: "center" },
+      { runs: [lab("ग्राम पंचायत राज : "), val("panchayat"), lab("          हल्का सांख्या : "), val("halka")], sz: S(24), jc: "center" },
+      { runs: [{ t: "स्थल पर दखल-कब्जा एवं जमाबंदी रकवा से मिलान कर खतियानी रकवा का जमाबंदी बँटवारा", b: true }], sz: S(22), jc: "center" }
     ];
+    const info = [["राजस्व ग्राम", "mauja"], ["थाना सांख्या", "thana_no"], ["अंचल", "anchal"], ["पुलिस थाना", "police_thana"], ["अनुमण्डल", "anumandal"], ["राजस्व थाना", "rajasva_thana"], ["जिला", "jila"]];
+    const runs = [];
+    info.forEach((x, i) => { if (i) runs.push({ t: "     |     " }); runs.push(lab(x[0] + " : ")); runs.push(val(x[1])); });
+    return { paras, info: { runs, sz: S(21) } };
   }
 
   /* ---------- DOCX renderer ---------- */
+  const FONT = '<w:rFonts w:ascii="Mangal" w:hAnsi="Mangal" w:cs="Mangal" w:hint="cs"/>';
   function run(text, sz, bold) {
-    return '<w:r><w:rPr><w:rFonts w:ascii="Mangal" w:hAnsi="Mangal" w:cs="Mangal" w:hint="cs"/>' + (bold ? "<w:b/><w:bCs/>" : "") +
+    return "<w:r><w:rPr>" + FONT + (bold ? "<w:b/><w:bCs/>" : "") +
       '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/><w:lang w:bidi="hi-IN"/></w:rPr><w:t xml:space="preserve">' + esc(text) + "</w:t></w:r>";
   }
   function para(text, sz, jc, bold, extra) {
     return '<w:p><w:pPr>' + (extra || "") + '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="' + jc + '"/></w:pPr>' + (text === "" ? "" : run(text, sz, bold)) + "</w:p>";
   }
+  function paraRuns(runs, sz, jc, extra, before, after) {
+    return '<w:p><w:pPr>' + (extra || "") + '<w:spacing w:before="' + (before || 0) + '" w:after="' + (after || 0) + '" w:line="240" w:lineRule="auto"/><w:jc w:val="' + jc + '"/></w:pPr>' +
+      runs.map((r) => run(r.t, sz, r.b)).join("") + "</w:p>";
+  }
   const sectPr = (c) => '<w:sectPr><w:pgSz w:w="' + c.pageW + '" w:h="' + c.pageH + '" w:orient="landscape"/>' +
     '<w:pgMar w:top="720" w:right="' + MARGIN + '" w:bottom="720" w:left="' + MARGIN + '" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>';
+
+  function docxHeader(hb, total) {
+    const rule = '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="2" w:color="1F3864"/></w:pBdr>';
+    const ps = hb.paras.map((p, i) => paraRuns(p.runs, p.sz, p.jc, p.rule ? rule : "", i === 0 ? 0 : 40, i === 0 ? 60 : 0)).join("");
+    const box = '<w:tbl><w:tblPr><w:tblW w:w="' + total + '" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>' +
+      ["top", "left", "bottom", "right"].map((b) => "<w:" + b + ' w:val="single" w:sz="8" w:space="0" w:color="1F3864"/>').join("") +
+      '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="' + total + '"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="' + total +
+      '" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="EEF2F9"/><w:tcMar><w:top w:w="70" w:type="dxa"/><w:bottom w:w="70" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>' +
+      paraRuns(hb.info.runs, hb.info.sz, "center") + "</w:tc></w:tr></w:tbl>";
+    return ps + para("", 8, "left") + box + para("", 8, "left");
+  }
 
   function docxCell(cell, w) {
     const sz = cell.sz || 18;
@@ -207,9 +243,10 @@
     if (cell.span > 1) pr += '<w:gridSpan w:val="' + cell.span + '"/>';
     if (cell.vm) pr += cell.vm === "restart" ? '<w:vMerge w:val="restart"/>' : "<w:vMerge/>";
     if (cell.shade) pr += '<w:shd w:val="clear" w:color="auto" w:fill="' + cell.shade + '"/>';
+    pr += '<w:tcMar><w:top w:w="35" w:type="dxa"/><w:bottom w:w="35" w:type="dxa"/></w:tcMar>';
     pr += '<w:vAlign w:val="' + (cell.va || "center") + '"/>';
     const jc = cell.jc || "center";
-    const ps = cell.lines.length ? cell.lines.map((l) => para(l, sz, jc, cell.bold)).join("") : para("", sz, jc);
+    const ps = cell.lines.length ? cell.lines.map((l, i) => para(l, sz, jc, cell.bold || (cell.boldFirst && i === 0))).join("") : para("", sz, jc);
     return "<w:tc><w:tcPr>" + pr + "</w:tcPr>" + ps + "</w:tc>";
   }
   function docxTable(ch) {
@@ -219,11 +256,12 @@
       const xml = cells.map((cell) => { const w = wAt(pos, cell.span); pos += cell.span; return docxCell(cell, w); }).join("");
       return "<w:tr><w:trPr><w:cantSplit/>" + (o.hdr ? "<w:tblHeader/>" : "") + (o.h ? '<w:trHeight w:val="' + o.h + '" w:hRule="atLeast"/>' : "") + "</w:trPr>" + xml + "</w:tr>";
     };
+    const bd = (n, sz) => "<w:" + n + ' w:val="single" w:sz="' + sz + '" w:space="0" w:color="000000"/>';
     return '<w:tbl><w:tblPr><w:tblW w:w="' + ch.total + '" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>' +
-      ["top", "left", "bottom", "right", "insideH", "insideV"].map((b) => "<w:" + b + ' w:val="single" w:sz="6" w:space="0" w:color="000000"/>').join("") +
+      bd("top", 12) + bd("left", 12) + bd("bottom", 12) + bd("right", 12) + bd("insideH", 6) + bd("insideV", 6) +
       '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="40" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
       "<w:tblGrid>" + ch.cols.map((c) => '<w:gridCol w:w="' + c.w + '"/>').join("") + "</w:tblGrid>" +
-      ch.headRows.map((r) => rowXml(r, { hdr: true })).join("") + ch.bodyRows.map((r) => rowXml(r, { h: 560 })).join("") + "</w:tbl>";
+      ch.headRows.map((r) => rowXml(r, { hdr: true })).join("") + ch.bodyRows.map((r) => rowXml(r, { h: 640 })).join("") + "</w:tbl>";
   }
 
   async function build(JSZip, templateB64, st) {
@@ -232,10 +270,9 @@
     let doc = await zip.file("word/document.xml").async("string");
     const bStart = doc.indexOf("<w:body>") + "<w:body>".length;
     const sectStart = doc.lastIndexOf("<w:sectPr");
-    const hdr = headerLines(L.header);
     const body = L.chunks.map((ch, i) => {
       const last = i === L.chunks.length - 1;
-      return hdr.map((p) => para(p.text, p.sz, p.jc, p.bold)).join("") + para("", 10, "left") + docxTable(ch) +
+      return docxHeader(headerBlock(L.header, ch.pageW), ch.total) + docxTable(ch) +
         (last ? para("", 10, "left") : "<w:p><w:pPr>" + sectPr(ch) + "</w:pPr></w:p>");
     }).join("");
     doc = doc.slice(0, bStart) + body + sectPr(L.chunks[L.chunks.length - 1]) + "</w:body></w:document>";
@@ -245,10 +282,13 @@
 
   /* ---------- HTML preview ---------- */
   function previewHtml(st) {
-    const L = layout(st), hdr = headerLines(L.header);
+    const L = layout(st);
     const cellHtml = (tag, cell, rs) => "<" + tag + (cell.span > 1 ? ' colspan="' + cell.span + '"' : "") + (rs > 1 ? ' rowspan="' + rs + '"' : "") +
-      ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t" : "") + '" style="font-size:' + ((cell.sz || 18) / 2) + 'pt">' + cell.lines.map(esc).join("<br>") + "</" + tag + ">";
+      ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t" : "") + '" style="font-size:' + ((cell.sz || 18) / 2) + "pt" + (cell.shade ? ";background:#" + cell.shade : "") + (cell.bold ? ";font-weight:700" : "") + '">' +
+      cell.lines.map((l, i) => (cell.boldFirst && i === 0 ? "<b>" + esc(l) + "</b>" : esc(l))).join("<br>") + "</" + tag + ">";
+    const runsHtml = (runs) => runs.map((r) => r.b ? "<b>" + esc(r.t) + "</b>" : esc(r.t)).join("").replace(/ {2,}/g, (m) => "&nbsp;".repeat(m.length));
     return L.chunks.map((ch, ci) => {
+      const hb = headerBlock(L.header, ch.pageW);
       const cg = "<colgroup>" + ch.cols.map((c) => '<col style="width:' + (c.w / 15).toFixed(1) + 'px">').join("") + "</colgroup>";
       const head = ch.headRows.map((cells) => "<tr>" + cells.map((cell) => cell.vm === "cont" ? "" : cellHtml("th", cell, cell.head)).join("") + "</tr>").join("");
       const bodyRows = ch.bodyRows.map((cells, ri) => "<tr>" + cells.map((cell, k) => {
@@ -261,7 +301,8 @@
       return '<div class="pv-page"><div class="pv-bar"><span class="pv-cap">पेज ' + (ci + 1) + " / " + L.chunks.length + " · " + ch.cols.length + ' कॉलम</span>' +
         '<button type="button" class="btn ghost sm" data-act="pvToggle">पूरा आकार / स्क्रीन में फिट</button></div>' +
         '<div class="pv-scroll" data-pw="' + pw + '"><div class="pv-zoom"><div class="pv-sheet" style="width:' + pw + 'px">' +
-        '<div class="pv-head">' + hdr.map((p) => '<div class="' + (p.jc === "center" ? "c" : "") + (p.bold ? " b" : "") + '" style="font-size:' + (p.sz / 2) + 'pt">' + esc(p.text) + "</div>").join("") + "</div>" +
+        '<div class="pv-head">' + hb.paras.map((p) => '<div class="' + (p.rule ? "rule" : "") + '" style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") +
+        '<div class="pv-info" style="font-size:' + (hb.info.sz / 2) + 'pt">' + runsHtml(hb.info.runs) + "</div></div>" +
         '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table></div></div></div></div>";
     }).join("");
   }
