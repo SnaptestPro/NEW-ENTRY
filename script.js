@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const KEY = "batwaraForm_v2";
+  const KEY = "batwaraForm_v3", OLD_KEY = "batwaraForm_v2";
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const h = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -27,31 +27,48 @@
     khata: "", khesra: "", k_ac: "", k_dc: "", n_ac: "", n_dc: "", min_janib: "",
     north: "", north_ref: "", south: "", south_ref: "", east: "", east_ref: "", west: "", west_ref: ""
   });
-  const blankRow = (n) => ({
-    name: "", rel_type: "पिता", rel_naam: "", addr: "",
-    jamabandi: "", khata: "", khesra: "", k_ac: "", k_dc: "", n_ac: "", n_dc: "",
+  const blankPlot = (n, prev) => ({
+    jamabandi: prev ? prev.jamabandi : "", khata: prev ? prev.khata : "", khesra: "", k_ac: "", k_dc: "", n_ac: "", n_dc: "",
     abhiyukti: "", sch: Array.from({ length: n }, blankSch)
   });
-  const freshState = () => ({ header: {}, schedules: [{ name: "" }], rows: [blankRow(1)] });
+  // एक रैयत (नाम/पिता/पता एक ही बार) + उसकी कई खेसरा-पंक्तियाँ (plots)
+  const blankGroup = (n) => ({ name: "", rel_type: "पिता", rel_naam: "", addr: "", plots: [blankPlot(n)] });
+  const freshState = () => ({ header: {}, schedules: [{ name: "" }], groups: [blankGroup(1)] });
 
   function normalize(st) {
     st.header = st.header || {};
     if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [{ name: "" }];
-    if (!Array.isArray(st.rows) || !st.rows.length) st.rows = [blankRow(st.schedules.length)];
-    st.rows.forEach((r) => {
-      r.sch = Array.isArray(r.sch) ? r.sch : [];
-      while (r.sch.length < st.schedules.length) r.sch.push(blankSch());
-      r.sch.length = st.schedules.length;
+    if (!Array.isArray(st.groups) || !st.groups.length) st.groups = [blankGroup(st.schedules.length)];
+    st.groups.forEach((g) => {
+      if (!Array.isArray(g.plots) || !g.plots.length) g.plots = [blankPlot(st.schedules.length)];
+      g.plots.forEach((r) => {
+        r.sch = Array.isArray(r.sch) ? r.sch : [];
+        while (r.sch.length < st.schedules.length) r.sch.push(blankSch());
+        r.sch.length = st.schedules.length;
+      });
+    });
+    return st;
+  }
+  // पुराने (v2) डाटा को नए ढाँचे में बदलना: एक जैसे नाम+पिता+पता वाली लगातार पंक्तियाँ = एक रैयत
+  function migrate(old) {
+    const st = { header: old.header || {}, schedules: old.schedules || [{ name: "" }], groups: [] };
+    (old.rows || []).forEach((r) => {
+      const last = st.groups[st.groups.length - 1];
+      const same = last && (last.name || "").trim() === (r.name || "").trim() && (last.rel_naam || "").trim() === (r.rel_naam || "").trim() && (last.addr || "").trim() === (r.addr || "").trim();
+      const plot = { jamabandi: r.jamabandi, khata: r.khata, khesra: r.khesra, k_ac: r.k_ac, k_dc: r.k_dc, n_ac: r.n_ac, n_dc: r.n_dc, abhiyukti: r.abhiyukti, sch: r.sch };
+      if (same) last.plots.push(plot);
+      else st.groups.push({ name: r.name, rel_type: r.rel_type || "पिता", rel_naam: r.rel_naam, addr: r.addr, plots: [plot] });
     });
     return st;
   }
   function load() {
     try { const raw = localStorage.getItem(KEY); if (raw) return normalize(JSON.parse(raw)); } catch (e) {}
+    try { const raw = localStorage.getItem(OLD_KEY); if (raw) return normalize(migrate(JSON.parse(raw))); } catch (e) {}
     return normalize(freshState());
   }
 
   let state = load();
-  const ui = { step: 0, openRow: 0, schTab: {} };
+  const ui = { step: 0, openGroup: 0, openPlot: {}, schTab: {} };
 
   let saveTimer = null;
   function save() {
@@ -114,8 +131,8 @@
     return one("खतियानी रकवा", b.kT, b.kS, b.kAny) + one("नक्शा रकवा", b.nT, b.nS, b.nAny) ||
       "<span>ऊपर (कॉलम 5-6) में कुल रकवा भरते ही यहाँ बँटवारे का मिलान दिखेगा।</span>";
   }
-  const rowHasData = (r) =>
-    ["name", "rel_naam", "addr", "jamabandi", "khata", "khesra", "k_ac", "k_dc", "n_ac", "n_dc", "abhiyukti"].some((k) => String(r[k] || "").trim()) ||
+  const plotHasData = (r) =>
+    ["jamabandi", "khata", "khesra", "k_ac", "k_dc", "n_ac", "n_dc", "abhiyukti"].some((k) => String(r[k] || "").trim()) ||
     r.sch.some((s) => Object.keys(s).some((k) => String(s[k] || "").trim()));
 
   /* ---------- field builders ---------- */
@@ -170,18 +187,23 @@
       '<div class="card-b"><div class="sch-list">' + items + "</div></div></div>";
   }
 
-  /* ---------- Step 3 : rows ---------- */
-  function rowSummary(r, i) {
-    const nm = (r.name || "").trim() || "नई पंक्ति";
-    const meta = [r.jamabandi && "जमाबंदी " + r.jamabandi, r.khata && "खाता " + r.khata, r.khesra && "खेसरा " + r.khesra].filter(Boolean).join(" · ");
-    return '<b>' + h(nm) + "</b><small>" + (h(meta) || "विवरण भरा नहीं गया") + "</small>";
+  /* ---------- Step 3 : रैयत (एक बार) + खेसरा पंक्तियाँ ---------- */
+  const gName = (g) => (g.name || "").trim() || "नया रैयत";
+  function plotSummary(r) {
+    const meta = [r.khata && "खाता " + r.khata, r.khesra && "खेसरा " + r.khesra].filter(Boolean).join(" · ");
+    return "<b>" + (h(meta) || "खेसरा विवरण भरें") + "</b>";
   }
-  function rowForm(r, i) {
-    const P = "rows." + i + ".";
-    const sIdx = Math.min(ui.schTab[i] || 0, state.schedules.length - 1);
+  function groupSummary(g) {
+    const n = g.plots.filter(plotHasData).length;
+    return "<b>" + h(gName(g)) + "</b><small>" + (n ? n + " खेसरा पंक्ति" : "पंक्ति भरी नहीं") + "</small>";
+  }
+  function plotForm(gi, pi, r) {
+    const P = "groups." + gi + ".plots." + pi + ".";
+    const key = gi + "-" + pi;
+    const sIdx = Math.min(ui.schTab[key] || 0, state.schedules.length - 1);
     const SP = P + "sch." + sIdx + ".";
     const pills = state.schedules.map((s, k) =>
-      '<button type="button" class="pill ' + (k === sIdx ? "on" : "") + '" data-act="schTab" data-i="' + i + '" data-s="' + k + '">अनुसूचि ' + (k + 1) + (s.name ? " — " + h(s.name) : "") + "</button>").join("");
+      '<button type="button" class="pill ' + (k === sIdx ? "on" : "") + '" data-act="schTab" data-g="' + gi + '" data-p="' + pi + '" data-s="' + k + '">अनुसूचि ' + (k + 1) + (s.name ? " — " + h(s.name) : "") + "</button>").join("");
     const dirs = [["उत्तर", "north"], ["दक्षिण", "south"], ["पूर्व", "east"], ["पश्चिम", "west"]];
     const chau = '<div class="chau"><span class="head"></span><span class="head">चौहद्दी (नाम)</span><span class="head">Ref. खेसरा सं॰</span>' +
       dirs.map((d) => '<span class="dir">' + d[0] + "</span>" +
@@ -189,12 +211,7 @@
         '<input type="text" data-p="' + SP + d[1] + '_ref" value="' + h(getP(SP + d[1] + "_ref")) + '">').join("") + "</div>";
 
     return '<div class="row-body">' +
-      '<div class="sec"><div class="sec-t">मौताबिक जमाबंदी एवं मौताबिक खतियान <small>कॉलम 1 – 6</small></div><div class="grid g4">' +
-      fld(P + "name", "खतियानी रैयत का नाम", { sub: "कॉलम 1", cls: "span2", ph: "नाम" }) +
-      '<div class="fld span2"><span>पिता / पति का नाम<i>कॉलम 1</i></span><div class="rel">' +
-      '<select data-p="' + P + 'rel_type">' + ["पिता", "पति", "अभिभावक"].map((o) => "<option" + (r.rel_type === o ? " selected" : "") + ">" + o + "</option>").join("") + "</select>" +
-      '<input type="text" data-p="' + P + 'rel_naam" value="' + h(r.rel_naam) + '"></div></div>' +
-      fld(P + "addr", "पता", { sub: "कॉलम 1", cls: "span4", ph: "गाँव, पोस्ट…" }) +
+      '<div class="sec"><div class="sec-t">जमाबंदी / खाता / खेसरा <small>कॉलम 2 – 6</small></div><div class="grid g4">' +
       fld(P + "jamabandi", "जमाबंदी सांख्या", { sub: "कॉलम 2" }) +
       fld(P + "khata", "खाता सांख्या", { sub: "कॉलम 3" }) +
       fld(P + "khesra", "खेसरा सांख्या", { sub: "कॉलम 4" }) +
@@ -203,7 +220,7 @@
       rk(P + "n_ac", P + "n_dc", "नक्शा रकवा (ए० डी०) — कॉलम 6", "span2") +
       "</div></div>" +
 
-      '<div class="sec"><div class="sec-t">अनुसूचि-वार बँटवारा <small>कॉलम 7 – 24</small></div>' +
+      '<div class="sec"><div class="sec-t">अनुसूचि-वार बँटवारा <small>सिर्फ़ जिस अनुसूचि में हिस्सा है वही भरें</small></div>' +
       '<div class="pills">' + pills + "</div>" +
       '<div class="grid g4">' +
       fld(SP + "khata", "खाता सांख्या", { sub: "अनुसूचि " + (sIdx + 1) }) +
@@ -213,54 +230,75 @@
       rk(SP + "n_ac", SP + "n_dc", "नक्शा रकवा (ए० डी०)", "span2") +
       '<div class="span4"><div class="fld"><span>चौहद्दी</span></div>' + chau + "</div>" +
       "</div>" +
-      '<div class="bal" data-bal="' + i + '">' + balHtml(r) + "</div></div>" +
+      '<div class="bal" data-bal="' + key + '">' + balHtml(r) + "</div></div>" +
 
-      '<div class="sec"><div class="sec-t">अभियुक्ति <small>कॉलम 25</small></div><div class="grid g2">' +
+      '<div class="sec"><div class="sec-t">अभियुक्ति <small>वैकल्पिक</small></div><div class="grid g2">' +
       fld(P + "abhiyukti", "अभियुक्ति", { cls: "span2" }) + "</div></div></div>";
   }
   function panelRows() {
-    const cards = state.rows.map((r, i) => {
-      const open = ui.openRow === i, st = status(r);
+    const cards = state.groups.map((g, gi) => {
+      const open = ui.openGroup === gi, G = "groups." + gi + ".";
+      const op = ui.openPlot[gi] == null ? 0 : ui.openPlot[gi];
+      let body = "";
+      if (open) {
+        body = '<div class="row-body"><div class="sec"><div class="sec-t">रैयत की जानकारी <small>सिर्फ़ एक बार भरें — सारी खेसरा पंक्तियों में अपने-आप जुड़ेगी</small></div><div class="grid g4">' +
+          fld(G + "name", "खतियानी रैयत का नाम", { cls: "span2", ph: "नाम" }) +
+          '<div class="fld span2"><span>पिता / पति का नाम</span><div class="rel">' +
+          '<select data-p="' + G + 'rel_type">' + ["पिता", "पति", "अभिभावक"].map((o) => "<option" + (g.rel_type === o ? " selected" : "") + ">" + o + "</option>").join("") + "</select>" +
+          '<input type="text" data-p="' + G + 'rel_naam" value="' + h(g.rel_naam) + '"></div></div>' +
+          fld(G + "addr", "पता", { cls: "span4", ph: "गाँव, पोस्ट…" }) +
+          "</div></div>" +
+          '<div class="sec"><div class="sec-t">खेसरा पंक्तियाँ <small>हर खेसरा = रिज़ल्ट की एक पंक्ति</small></div>' +
+          g.plots.map((p, pi) => {
+            const st = status(p), pOpen = op === pi;
+            return '<div class="row-card ' + (pOpen ? "open" : "") + '"><div class="row-head" data-act="togglePlot" data-g="' + gi + '" data-p="' + pi + '"><div class="row-n">' + (pi + 1) + "</div>" +
+              '<div class="row-sum" data-psum="' + gi + "-" + pi + '">' + plotSummary(p) + "</div>" +
+              '<span class="badge ' + st.cls + '" data-badge="' + gi + "-" + pi + '">' + st.txt + "</span>" +
+              '<div class="row-actions">' +
+              (g.plots.length > 1 ? '<button type="button" class="btn danger sm" data-act="delPlot" data-g="' + gi + '" data-p="' + pi + '" title="हटाएँ">🗑 <span>हटाएँ</span></button>' : "") +
+              "</div></div>" + (pOpen ? plotForm(gi, pi, p) : "") + "</div>";
+          }).join("") +
+          '<button type="button" class="add-row" data-act="addPlot" data-g="' + gi + '">+ इसी रैयत की नई खेसरा पंक्ति</button></div></div>';
+      }
       return '<div class="row-card ' + (open ? "open" : "") + '">' +
-        '<div class="row-head" data-act="toggleRow" data-i="' + i + '"><div class="row-n">' + (i + 1) + "</div>" +
-        '<div class="row-sum" data-sum="' + i + '">' + rowSummary(r, i) + "</div>" +
-        '<span class="badge ' + st.cls + '" data-badge="' + i + '">' + st.txt + "</span>" +
+        '<div class="row-head" data-act="toggleGroup" data-g="' + gi + '"><div class="row-n">' + (gi + 1) + "</div>" +
+        '<div class="row-sum" data-gsum="' + gi + '">' + groupSummary(g) + "</div>" +
         '<div class="row-actions">' +
-        '<button type="button" class="btn ghost sm" data-act="copyRow" data-i="' + i + '" title="इस पंक्ति की कॉपी">⧉ <span>कॉपी</span></button>' +
-        (state.rows.length > 1 ? '<button type="button" class="btn danger sm" data-act="delRow" data-i="' + i + '" title="हटाएँ">🗑 <span>हटाएँ</span></button>' : "") +
-        "</div></div>" + (open ? rowForm(r, i) : "") + "</div>";
+        (state.groups.length > 1 ? '<button type="button" class="btn danger sm" data-act="delGroup" data-g="' + gi + '" title="हटाएँ">🗑 <span>हटाएँ</span></button>' : "") +
+        "</div></div>" + body + "</div>";
     }).join("");
-    return '<div class="info">हर पंक्ति DOCX की एक पंक्ति है। पहले <b>कॉलम 1-6</b> (मौताबिक जमाबंदी एवं खतियान) भरें, फिर हर <b>अनुसूचि</b> का हिस्सा (कॉलम 7-24)। रकवा का जोड़ अपने-आप मिलाया जाता है।</div>' +
-      cards + '<button type="button" class="add-row" data-act="addRow">+ नई पंक्ति जोड़ें</button>';
+    return '<div class="info">हर <b>रैयत</b> का नाम / पिता / पता सिर्फ़ <b>एक बार</b> भरें। उसके नीचे जितने <b>खेसरा</b> हों उतनी पंक्तियाँ जोड़ें। रिज़ल्ट में उतनी ही पंक्तियाँ और उतनी ही अनुसूचि आएँगी जितनी आपने भरी — खाली कॉलम दिखेंगे ही नहीं।</div>' +
+      cards + '<button type="button" class="add-row" data-act="addGroup">+ नया रैयत जोड़ें</button>';
   }
 
   /* ---------- Step 4 : review ---------- */
   function panelReview() {
-    const rows = state.rows.filter(rowHasData);
+    const flat = [];
+    state.groups.forEach((g, gi) => g.plots.forEach((p, pi) => { if (plotHasData(p)) flat.push({ g, gi, p, pi }); }));
     const checks = [];
     const missing = HEADER_FIELDS.filter((f) => !String(state.header[f[0]] || "").trim()).map((f) => f[1]);
     checks.push(missing.length ? ["warn", "गाँव / थाना विवरण अधूरा: " + missing.join(", ")] : ["ok", "गाँव / थाना विवरण पूरा है।"]);
     const unnamed = state.schedules.map((s, i) => (String(s.name || "").trim() ? null : i + 1)).filter(Boolean);
     checks.push(unnamed.length ? ["warn", "इन अनुसूचियों में नाम (बनाम) नहीं भरा: " + unnamed.join(", ")] : ["ok", "सभी अनुसूचियों के नाम भरे हैं।"]);
-    if (!rows.length) checks.push(["err", "अभी किसी पंक्ति में डाटा नहीं है — DOCX नहीं बन सकता।"]);
+    if (!flat.length) checks.push(["err", "अभी किसी पंक्ति में डाटा नहीं है — DOCX नहीं बन सकता।"]);
     else {
       let bad = 0;
-      rows.forEach((r) => { const s = status(r); if (s.cls === "warn") { bad++; checks.push(["warn", "पंक्ति " + (state.rows.indexOf(r) + 1) + ": " + s.txt.replace("⚠ ", "")]); } });
+      flat.forEach((x) => { const s = status(x.p); if (s.cls === "warn") { bad++; checks.push(["warn", gName(x.g) + " / खेसरा " + (x.p.khesra || x.pi + 1) + ": " + s.txt.replace("⚠ ", "")]); } });
       if (!bad) checks.push(["ok", "सभी पंक्तियों का रकवा मिलान सही है।"]);
     }
-    const pages = Math.max(1, Math.ceil(rows.length / 5)) * Math.ceil(state.schedules.length / 3);
-    const trs = rows.map((r) => {
-      const s = status(r), k = toD(r.k_ac, r.k_dc), n = toD(r.n_ac, r.n_dc);
-      return "<tr><td>" + (state.rows.indexOf(r) + 1) + "</td><td><b>" + h(r.name) + "</b><br><small>" + h(r.rel_naam ? r.rel_type + ": " + r.rel_naam : "") + "</small></td>" +
+    const pages = Math.ceil(state.schedules.length / 3);
+    const trs = flat.map((x, i) => {
+      const r = x.p, s = status(r), k = toD(r.k_ac, r.k_dc), n = toD(r.n_ac, r.n_dc);
+      return "<tr><td>" + (i + 1) + "</td><td><b>" + h(x.pi === 0 ? x.g.name : "〃") + "</b><br><small>" + h(x.pi === 0 && x.g.rel_naam ? x.g.rel_type + ": " + x.g.rel_naam : "") + "</small></td>" +
         "<td>" + h(r.jamabandi) + "</td><td>" + h(r.khata) + "</td><td>" + h(r.khesra) + "</td>" +
         "<td>" + (k == null ? "—" : fmtD(k)) + "</td><td>" + (n == null ? "—" : fmtD(n)) + '</td><td><span class="badge ' + s.cls + '">' + s.txt + "</span></td></tr>";
     }).join("");
     return '<div class="card"><div class="card-h"><div><h2>जाँच</h2><div class="hint">डाउनलोड से पहले एक बार मिलान देख लें (चेतावनी होने पर भी DOCX बन सकता है)।</div></div></div>' +
       '<div class="card-b"><ul class="checks">' + checks.map((c) => '<li class="' + c[0] + '"><span>' + (c[0] === "ok" ? "✓" : c[0] === "warn" ? "⚠" : "✕") + "</span><span>" + h(c[1]) + "</span></li>").join("") + "</ul></div></div>" +
       '<div class="card"><div class="card-h"><h2>पंक्तियों का सार</h2></div><div class="card-b tbl-wrap">' +
-      (rows.length ? '<table class="tbl"><thead><tr><th>क्र.</th><th>रैयत</th><th>जमाबंदी</th><th>खाता</th><th>खेसरा</th><th>खतियानी रकवा</th><th>नक्शा रकवा</th><th>बँटवारा</th></tr></thead><tbody>' + trs + "</tbody></table>" : "<p>कोई पंक्ति नहीं।</p>") +
+      (flat.length ? '<table class="tbl"><thead><tr><th>क्र.</th><th>रैयत</th><th>जमाबंदी</th><th>खाता</th><th>खेसरा</th><th>खतियानी रकवा</th><th>नक्शा रकवा</th><th>बँटवारा</th></tr></thead><tbody>' + trs + "</tbody></table>" : "<p>कोई पंक्ति नहीं।</p>") +
       "</div></div>" +
-      '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + rows.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · लगभग " + pages + " पेज (A3 landscape)</p></div>" +
+      '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + flat.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · " + pages + " पेज (A3 landscape, हर पेज पर अधिकतम 3 अनुसूचि)</p></div>" +
       '<button type="button" class="btn primary lg" data-act="download">⬇ DOCX डाउनलोड करें</button></div></div>';
   }
 
@@ -273,10 +311,14 @@
   function updateLive() {
     if (ui.step === 0) { const el = $("#hdrPreview"); if (el) el.innerHTML = headerPreview(); }
     if (ui.step === 2) {
-      state.rows.forEach((r, i) => {
-        const b = $('[data-badge="' + i + '"]'); if (b) { const s = status(r); b.className = "badge " + s.cls; b.textContent = s.txt; }
-        const sm = $('[data-sum="' + i + '"]'); if (sm) sm.innerHTML = rowSummary(r, i);
-        const bl = $('[data-bal="' + i + '"]'); if (bl) bl.innerHTML = balHtml(r);
+      state.groups.forEach((g, gi) => {
+        const gs = $('[data-gsum="' + gi + '"]'); if (gs) gs.innerHTML = groupSummary(g);
+        g.plots.forEach((p, pi) => {
+          const k = gi + "-" + pi;
+          const b = $('[data-badge="' + k + '"]'); if (b) { const s = status(p); b.className = "badge " + s.cls; b.textContent = s.txt; }
+          const sm = $('[data-psum="' + k + '"]'); if (sm) sm.innerHTML = plotSummary(p);
+          const bl = $('[data-bal="' + k + '"]'); if (bl) bl.innerHTML = balHtml(p);
+        });
       });
     }
   }
@@ -285,39 +327,45 @@
   /* ---------- events ---------- */
   document.addEventListener("input", (e) => {
     const p = e.target && e.target.dataset && e.target.dataset.p;
-    if (!p) return;
+    if (!p || !/\./.test(p)) return;
     setP(p, e.target.value);
     save(); updateLive();
   });
   document.addEventListener("change", (e) => {
     const p = e.target && e.target.dataset && e.target.dataset.p;
-    if (p && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); }
+    if (p && /\./.test(p) && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); }
   });
 
   document.addEventListener("click", (e) => {
     const t = e.target.closest("[data-act]");
     if (!t) return;
-    const act = t.dataset.act, i = Number(t.dataset.i), s = Number(t.dataset.s);
+    const d = t.dataset, act = d.act, i = Number(d.i), s = Number(d.s), gi = Number(d.g), pi = Number(d.p);
+    const n = state.schedules.length;
     if (act === "step") go(i);
-    else if (act === "toggleRow") { ui.openRow = ui.openRow === i ? -1 : i; render(); }
-    else if (act === "schTab") { ui.schTab[i] = s; render(); }
-    else if (act === "addRow") { state.rows.push(blankRow(state.schedules.length)); ui.openRow = state.rows.length - 1; save(); render(); }
-    else if (act === "copyRow") {
-      e.stopPropagation();
-      const c = JSON.parse(JSON.stringify(state.rows[i]));
-      state.rows.splice(i + 1, 0, c); ui.openRow = i + 1; save(); render(); toast("पंक्ति की कॉपी बन गई।");
+    else if (act === "toggleGroup") { ui.openGroup = ui.openGroup === gi ? -1 : gi; render(); }
+    else if (act === "togglePlot") { ui.openPlot[gi] = ui.openPlot[gi] === pi ? -1 : pi; render(); }
+    else if (act === "schTab") { ui.schTab[gi + "-" + pi] = s; render(); }
+    else if (act === "addGroup") { state.groups.push(blankGroup(n)); ui.openGroup = state.groups.length - 1; ui.openPlot[ui.openGroup] = 0; save(); render(); }
+    else if (act === "addPlot") {
+      const g = state.groups[gi], prev = g.plots[g.plots.length - 1];
+      g.plots.push(blankPlot(n, prev)); ui.openPlot[gi] = g.plots.length - 1; save(); render();
     }
-    else if (act === "delRow") {
+    else if (act === "delPlot") {
       e.stopPropagation();
-      if (!confirm("पंक्ति " + (i + 1) + " हमेशा के लिए हट जाएगी। ठीक है?")) return;
-      state.rows.splice(i, 1); ui.openRow = Math.min(ui.openRow, state.rows.length - 1); save(); render();
+      if (!confirm("यह खेसरा पंक्ति हमेशा के लिए हट जाएगी। ठीक है?")) return;
+      state.groups[gi].plots.splice(pi, 1); ui.openPlot[gi] = 0; save(); render();
+    }
+    else if (act === "delGroup") {
+      e.stopPropagation();
+      if (!confirm("रैयत " + (gi + 1) + " और उसकी सारी पंक्तियाँ हमेशा के लिए हट जाएँगी। ठीक है?")) return;
+      state.groups.splice(gi, 1); ui.openGroup = Math.min(ui.openGroup, state.groups.length - 1); ui.openPlot = {}; save(); render();
     }
     else if (act === "addSched") {
-      state.schedules.push({ name: "" }); state.rows.forEach((r) => r.sch.push(blankSch())); save(); render();
+      state.schedules.push({ name: "" }); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.push(blankSch()))); save(); render();
     }
     else if (act === "delSched") {
       if (!confirm("अनुसूचि " + (s + 1) + " और उसका सारा डाटा हट जाएगा। ठीक है?")) return;
-      state.schedules.splice(s, 1); state.rows.forEach((r) => r.sch.splice(s, 1)); ui.schTab = {}; save(); render();
+      state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
     else if (act === "download") download();
   });
@@ -329,7 +377,7 @@
     if (!confirm("सभी अनुसूचियाँ और पंक्तियाँ साफ़ हो जाएँगी (गाँव / थाना विवरण बचा रहेगा)। नया फॉर्म शुरू करें?")) return;
     const hd = state.header;
     state = normalize(freshState()); state.header = hd;
-    ui.step = 1; ui.openRow = 0; ui.schTab = {};
+    ui.step = 1; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     render(); toast("नया फॉर्म तैयार है।");
   });
@@ -346,7 +394,7 @@
       a.href = URL.createObjectURL(blob); a.download = "batwara_panchnama.docx";
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-      toast("DOCX तैयार — " + r.pageCount + " पेज");
+      toast("DOCX तैयार — " + r.rowCount + " पंक्ति, " + r.schedCount + " अनुसूचि");
     } catch (err) { toast(err.message || "DOCX नहीं बन पाया", true); }
   }
 
