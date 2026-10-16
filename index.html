@@ -21,6 +21,8 @@
   </div>
   <div class="top-actions">
     <span class="save-state" id="saveState">● स्वतः सेव चालू</span>
+    <button type="button" class="btn ghost" id="btnImport" title="पहले डाउनलोड की हुई DOCX खोलें — सारा डाटा वैसा ही भर जाएगा">📂 DOCX से खोलें</button>
+    <input type="file" id="fileImport" accept=".docx" hidden>
     <button type="button" class="btn ghost" id="btnHist" title="पिछला सेव किया हुआ डाटा देखें / वापस लाएँ">🕘 पिछला डाटा <b id="histCount">0</b></button>
     <button type="button" class="btn ghost" id="btnDemo" title="सारा फॉर्म नमूना डाटा से एक क्लिक में भर दें">⚡ डेमो डाटा भरें</button>
     <button type="button" class="btn ghost" id="btnNew">नया फॉर्म</button>
@@ -52,6 +54,8 @@
     <div class="modal-f"><button type="button" class="btn danger sm" id="histClear">सारा पिछला डाटा हटाएँ</button></div>
   </div>
 </div>
+
+<div id="dropHint" class="drop-hint" hidden><div>📂 DOCX यहाँ छोड़ें — डाटा अपने-आप भर जाएगा</div></div>
 
 <div id="toast" class="toast"></div>
 

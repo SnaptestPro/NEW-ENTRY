@@ -468,6 +468,30 @@
     histClose(); render(); window.scrollTo({ top: 0 }); toast("पिछला डाटा खुल गया।");
   });
 
+  /* ---------- पहले की DOCX खोलकर डाटा वापस भरना ---------- */
+  async function importDocx(file) {
+    if (!file) return;
+    if (!/\.docx$/i.test(file.name)) { toast("सिर्फ़ .docx फाइल चुनें।", true); return; }
+    let st = null;
+    try { st = await BatwaraDocx.extractState(JSZip, await file.arrayBuffer()); }
+    catch (e) { toast("यह फाइल पढ़ी नहीं जा सकी — सही DOCX चुनें।", true); return; }
+    if (!st) { toast("इस DOCX में फॉर्म का डाटा नहीं मिला। सिर्फ़ इसी साइट के नए वर्ज़न से बनी DOCX खुल सकती है।", true); return; }
+    if (stateHasData(state) && !confirm("अभी का डाटा हट जाएगा (वो 'पिछला डाटा' में सेव रहेगा)। इस DOCX का डाटा खोलें?")) return;
+    snapshot("DOCX से खोलने से पहले");
+    state = normalize(st);
+    ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    render(); window.scrollTo({ top: 0 }); toast("DOCX का सारा डाटा भर गया — अब एडिट करके फिर डाउनलोड करें।");
+  }
+  $("#btnImport").addEventListener("click", () => $("#fileImport").click());
+  $("#fileImport").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; importDocx(f); });
+  let dragN = 0;
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf("Files") >= 0;
+  window.addEventListener("dragenter", (e) => { if (hasFiles(e)) { dragN++; $("#dropHint").hidden = false; } });
+  window.addEventListener("dragleave", (e) => { if (hasFiles(e) && --dragN <= 0) { dragN = 0; $("#dropHint").hidden = true; } });
+  window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("drop", (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragN = 0; $("#dropHint").hidden = true; importDocx(e.dataTransfer.files[0]); });
+
   /* ---------- डेमो डाटा (एक क्लिक में पूरा फॉर्म) ---------- */
   function demoState() {
     const names = ["विष्णु कुमार", "सोनू कुमार", "चंदन कुमार", "ओमकार ठाकुर", "रमेश प्रसाद"];

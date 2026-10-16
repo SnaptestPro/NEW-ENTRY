@@ -277,6 +277,38 @@
       ch.headRows.map((r) => rowXml(r, { hdr: true })).join("") + ch.bodyRows.map((r) => rowXml(r, { h: 640 })).join("") + "</w:tbl>";
   }
 
+  /* ---------- DOCX के अंदर पूरा डाटा छिपाकर रखना (ताकि बाद में वही DOCX खोलकर सब वैसा ही भर जाए) ---------- */
+  const NS = "urn:batwara:panchnama:v1";
+  const b64enc = (str) => typeof btoa === "function" ? btoa(unescape(encodeURIComponent(str))) : Buffer.from(str, "utf8").toString("base64");
+  const b64dec = (b64) => typeof atob === "function" ? decodeURIComponent(escape(atob(b64))) : Buffer.from(b64, "base64").toString("utf8");
+
+  async function embedState(zip, st) {
+    const payload = b64enc(JSON.stringify({ v: 1, app: "batwara", state: st }));
+    const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
+    zip.file("customXml/item2.xml", H + '<batwara xmlns="' + NS + '"><state>' + payload + "</state></batwara>");
+    zip.file("customXml/itemProps2.xml", H + '<ds:datastoreItem ds:itemID="{5C0E9B7A-3D41-4F6B-8A52-7E1B2C9D4F10}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"><ds:schemaRefs><ds:schemaRef ds:uri="' + NS + '"/></ds:schemaRefs></ds:datastoreItem>');
+    zip.file("customXml/_rels/item2.xml.rels", H + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps2.xml"/></Relationships>');
+    let rels = await zip.file("word/_rels/document.xml.rels").async("string");
+    rels = rels.replace("</Relationships>", '<Relationship Id="rIdBatwara1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item2.xml"/></Relationships>');
+    zip.file("word/_rels/document.xml.rels", rels);
+    let ct = await zip.file("[Content_Types].xml").async("string");
+    ct = ct.replace("</Types>", '<Override PartName="/customXml/itemProps2.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/></Types>');
+    zip.file("[Content_Types].xml", ct);
+  }
+
+  // DOCX (ArrayBuffer / Blob / Buffer) से डाटा वापस निकालना; न मिले तो null
+  async function extractState(JSZip, data) {
+    const zip = await JSZip.loadAsync(data);
+    const names = Object.keys(zip.files).filter((n) => /^customXml\/item\d+\.xml$/.test(n));
+    for (const n of names) {
+      const x = await zip.file(n).async("string");
+      const m = x.indexOf(NS) >= 0 && x.match(/<state>([^<]+)<\/state>/);
+      if (!m) continue;
+      try { const o = JSON.parse(b64dec(m[1].trim())); if (o && o.app === "batwara" && o.state) return o.state; } catch (e) {}
+    }
+    return null;
+  }
+
   async function build(JSZip, templateB64, st) {
     const L = layout(st);
     const zip = await JSZip.loadAsync(templateB64, { base64: true });
@@ -290,6 +322,7 @@
     }).join("");
     doc = doc.slice(0, bStart) + body + sectPr(L.chunks[L.chunks.length - 1]) + "</w:body></w:document>";
     zip.file("word/document.xml", doc);
+    await embedState(zip, st);
     return { zip, pageCount: L.chunks.length, rowCount: L.rowCount, schedCount: L.schedCount };
   }
 
@@ -320,7 +353,7 @@
     }).join("");
   }
 
-  root.BatwaraDocx = { build, layout, previewHtml };
+  root.BatwaraDocx = { build, layout, previewHtml, extractState };
   if (typeof module !== "undefined" && module.exports) module.exports = root.BatwaraDocx;
 
 })(typeof window !== "undefined" ? window : globalThis);

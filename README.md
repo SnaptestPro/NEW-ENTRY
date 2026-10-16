@@ -8,6 +8,9 @@ Plain HTML/CSS/JS — koi backend nahi. `index.html` browser me kholo. Data brow
 3. **रैयत + खेसरा पंक्तियाँ** — raiyat ka naam / pita-pati / pata **sirf ek baar**. Uske neeche jitne khesra, utni pankti (jamabandi/khata agli pankti me apne-aap aa jaate hain). Har pankti me sirf usi anusuchi ka hissa bharo jisme hissa hai.
 4. **जाँच व डाउनलोड** — checks, summary, DOCX download.
 
+## Purani DOCX dobara kholna
+Is site se bani DOCX ke andar poora form-data chhupa rehta hai. Upar "DOCX से खोलें" dabakar (ya DOCX ko page par drag karke) wahi file chunein — sab data waisa hi bhar jaata hai. Sirf naye version se bani DOCX khulti hai.
+
 ## DOCX result ke niyam
 - Pankti = jitni khesra entry bhari, utni hi (fixed 5 nahi).
 - Naam/pita/pata ek baar, us raiyat ki saari panktiyon me merge.

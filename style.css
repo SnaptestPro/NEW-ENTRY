@@ -341,3 +341,7 @@ table.pv tbody tr{height:42px}
 .hist-act{display:flex;gap:6px}
 .hist-empty{text-align:center;padding:30px 10px;color:#64748b}
 @media(max-width:560px){.hist-item{grid-template-columns:34px 1fr}.hist-act{grid-column:1/-1;justify-content:flex-end}}
+
+.drop-hint{position:fixed;inset:0;z-index:120;background:rgba(37,99,235,.18);backdrop-filter:blur(2px);display:grid;place-items:center;pointer-events:none}
+.drop-hint[hidden]{display:none}
+.drop-hint div{background:#fff;border:3px dashed #2563eb;border-radius:18px;padding:34px 44px;font-size:20px;font-weight:700;color:#1e3a8a;box-shadow:0 20px 50px rgba(0,0,0,.25)}
