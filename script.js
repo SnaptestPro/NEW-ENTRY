@@ -33,11 +33,13 @@
   });
   // एक रैयत (नाम/पिता/पता एक ही बार) + उसकी कई खेसरा-पंक्तियाँ (plots)
   const blankGroup = (n) => ({ name: "", rel_type: "पिता", rel_naam: "", addr: "", plots: [blankPlot(n)] });
-  const freshState = () => ({ header: {}, schedules: [{ name: "" }], groups: [blankGroup(1)] });
+  const blankSched = () => ({ name: "", rel_type: "पिता", rel_naam: "", jati: "", nivasi: "निज ग्राम" });
+  const freshState = () => ({ header: {}, schedules: [blankSched()], groups: [blankGroup(1)] });
 
   function normalize(st) {
     st.header = st.header || {};
-    if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [{ name: "" }];
+    if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [blankSched()];
+    st.schedules.forEach((x) => { if (x.rel_type == null) x.rel_type = "पिता"; ["rel_naam", "jati", "nivasi"].forEach((k) => { if (x[k] == null) x[k] = ""; }); });
     if (!Array.isArray(st.groups) || !st.groups.length) st.groups = [blankGroup(st.schedules.length)];
     st.groups.forEach((g) => {
       if (!Array.isArray(g.plots) || !g.plots.length) g.plots = [blankPlot(st.schedules.length)];
@@ -51,7 +53,7 @@
   }
   // पुराने (v2) डाटा को नए ढाँचे में बदलना: एक जैसे नाम+पिता+पता वाली लगातार पंक्तियाँ = एक रैयत
   function migrate(old) {
-    const st = { header: old.header || {}, schedules: old.schedules || [{ name: "" }], groups: [] };
+    const st = { header: old.header || {}, schedules: old.schedules || [blankSched()], groups: [] };
     (old.rows || []).forEach((r) => {
       const last = st.groups[st.groups.length - 1];
       const same = last && (last.name || "").trim() === (r.name || "").trim() && (last.rel_naam || "").trim() === (r.rel_naam || "").trim() && (last.addr || "").trim() === (r.addr || "").trim();
@@ -177,12 +179,20 @@
 
   /* ---------- Step 2 : schedules ---------- */
   function panelSchedules() {
-    const items = state.schedules.map((s, i) =>
-      '<div class="sch-item"><div class="sch-no">' + (i + 1) + "</div>" +
-      fld("schedules." + i + ".name", "अनुसूचि (Schedule) सांख्या " + (i + 1) + " — बनाम् (हिस्सेदार का नाम)", { ph: "जैसे: रामलखन प्रसाद" }) +
-      (state.schedules.length > 1 ? '<button type="button" class="btn danger sm" data-act="delSched" data-s="' + i + '">हटाएँ</button>' : "<span></span>") +
-      "</div>").join("");
-    return '<div class="card"><div class="card-h"><div><h2>अनुसूचियाँ (पक्षकार)</h2><div class="hint">हर हिस्सेदार की एक अनुसूचि। DOCX में हर पेज पर 3 अनुसूचि आती हैं; ज़्यादा होने पर अगला पेज अपने-आप बनेगा।</div></div>' +
+    const items = state.schedules.map((s, i) => {
+      const P = "schedules." + i + ".";
+      return '<div class="sch-edit c' + (i % 5) + '"><div class="sch-no">' + (i + 1) + "</div>" +
+        '<div class="grid g4">' +
+        fld(P + "name", "अनुसूचि " + (i + 1) + " — बनाम् (हिस्सेदार का नाम)", { cls: "span2", ph: "जैसे: रामलखन प्रसाद" }) +
+        '<div class="fld span2"><span>पिता / पति का नाम</span><div class="rel"><select data-p="' + P + 'rel_type">' +
+        ["पिता", "पति", "अभिभावक"].map((o) => "<option" + (s.rel_type === o ? " selected" : "") + ">" + o + "</option>").join("") +
+        '</select><input type="text" data-p="' + P + 'rel_naam" value="' + h(s.rel_naam) + '"></div></div>' +
+        fld(P + "jati", "जाति", { ph: "जैसे: चमार" }) + fld(P + "nivasi", "निवासी", { ph: "निज ग्राम" }) +
+        "</div>" +
+        (state.schedules.length > 1 ? '<button type="button" class="btn danger sm" data-act="delSched" data-s="' + i + '">हटाएँ</button>' : "<span></span>") +
+        "</div>";
+    }).join("");
+    return '<div class="card"><div class="card-h"><div><h2>अनुसूचियाँ (पक्षकार)</h2><div class="hint">हर हिस्सेदार की एक अनुसूचि। नाम, पिता/पति, जाति, निवासी — ये सब अनुसूचि के header में छपेंगे (जो खाली छोड़ेंगे वो छपेगा नहीं)। एक पेज पर अधिकतम 5 अनुसूचि; ज़्यादा हों तो अगला पेज।</div></div>' +
       '<button type="button" class="btn soft" data-act="addSched">+ अनुसूचि जोड़ें</button></div>' +
       '<div class="card-b"><div class="sch-list">' + items + "</div></div></div>";
   }
@@ -355,19 +365,19 @@
     else if (act === "delPlot") {
       e.stopPropagation();
       if (!confirm("यह खेसरा पंक्ति हमेशा के लिए हट जाएगी। ठीक है?")) return;
-      state.groups[gi].plots.splice(pi, 1); ui.openPlot[gi] = 0; save(); render();
+      snapshot("खेसरा पंक्ति हटाने से पहले"); state.groups[gi].plots.splice(pi, 1); ui.openPlot[gi] = 0; save(); render();
     }
     else if (act === "delGroup") {
       e.stopPropagation();
       if (!confirm("रैयत " + (gi + 1) + " और उसकी सारी पंक्तियाँ हमेशा के लिए हट जाएँगी। ठीक है?")) return;
-      state.groups.splice(gi, 1); ui.openGroup = Math.min(ui.openGroup, state.groups.length - 1); ui.openPlot = {}; save(); render();
+      snapshot("रैयत हटाने से पहले"); state.groups.splice(gi, 1); ui.openGroup = Math.min(ui.openGroup, state.groups.length - 1); ui.openPlot = {}; save(); render();
     }
     else if (act === "addSched") {
-      state.schedules.push({ name: "" }); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.push(blankSch()))); save(); render();
+      state.schedules.push(blankSched()); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.push(blankSch()))); save(); render();
     }
     else if (act === "delSched") {
       if (!confirm("अनुसूचि " + (s + 1) + " और उसका सारा डाटा हट जाएगा। ठीक है?")) return;
-      state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
+      snapshot("अनुसूचि हटाने से पहले"); state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
     else if (act === "pvToggle") { t.closest(".pv-page").classList.toggle("full"); fitPreview(); }
     else if (act === "download") download();
@@ -379,6 +389,7 @@
   $("#btnDemo").addEventListener("click", () => {
     const hasData = state.groups.some((g) => (g.name || "").trim() || g.plots.some(plotHasData)) || state.schedules.some((s) => (s.name || "").trim());
     if (hasData && !confirm("अभी भरा हुआ डाटा हटकर डेमो डाटा आ जाएगा। ठीक है?")) return;
+    snapshot("डेमो भरने से पहले");
     state = demoState();
     ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -386,11 +397,75 @@
   });
   $("#btnNew").addEventListener("click", () => {
     if (!confirm("सभी अनुसूचियाँ और पंक्तियाँ साफ़ हो जाएँगी (गाँव / थाना विवरण बचा रहेगा)। नया फॉर्म शुरू करें?")) return;
+    snapshot("नया फॉर्म शुरू करने से पहले");
     const hd = state.header;
     state = normalize(freshState()); state.header = hd;
     ui.step = 1; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     render(); toast("नया फॉर्म तैयार है।");
+  });
+
+  /* ---------- पिछला डाटा (history): पिछले 20 तक, browser में सेव ---------- */
+  const HKEY = "batwaraHistory_v1", HMAX = 20;
+  // history में तभी रखें जब रैयत / खेसरा / अनुसूचि-नाम में कुछ भरा हो (सिर्फ़ गाँव का नाम नहीं)
+  const stateHasData = (st) => st.groups.some((g) => (g.name || "").trim() || (g.rel_naam || "").trim() || g.plots.some(plotHasData)) ||
+    st.schedules.some((s) => (s.name || "").trim());
+  function histLoad() { try { const a = JSON.parse(localStorage.getItem(HKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function histSave(list) {
+    for (;;) {
+      try { localStorage.setItem(HKEY, JSON.stringify(list)); return; }
+      catch (e) { if (list.length <= 1) return; list.pop(); }   // जगह कम पड़े तो सबसे पुराना हटे
+    }
+  }
+  function snapshot(reason) {
+    if (!stateHasData(state)) return;
+    const json = JSON.stringify(state), list = histLoad();
+    if (list[0] && list[0].json === json) { list[0].ts = Date.now(); list[0].reason = reason; }
+    else list.unshift({ id: Date.now() + "-" + Math.random().toString(36).slice(2, 6), ts: Date.now(), reason, json });
+    histSave(list.slice(0, HMAX)); histCount();
+  }
+  function histCount() { const el = $("#histCount"); if (el) el.textContent = histLoad().length; }
+  function histMeta(json) {
+    try {
+      const st = normalize(JSON.parse(json));
+      const raiyat = st.groups.filter((g) => (g.name || "").trim() || g.plots.some(plotHasData));
+      const rows = st.groups.reduce((n, g) => n + g.plots.filter(plotHasData).length, 0);
+      return { title: raiyat.length ? raiyat.map((g) => (g.name || "").trim() || "नाम नहीं").slice(0, 2).join(", ") + (raiyat.length > 2 ? " +" + (raiyat.length - 2) : "") : "(रैयत नहीं भरे)",
+        place: (st.header.mauja || "").trim(), line: raiyat.length + " रैयत · " + rows + " पंक्ति · " + st.schedules.length + " अनुसूचि" };
+    } catch (e) { return { title: "(पढ़ा नहीं जा सका)", place: "", line: "" }; }
+  }
+  function histRender() {
+    const list = histLoad(), box = $("#histList");
+    if (!list.length) { box.innerHTML = '<div class="hist-empty">अभी कोई पिछला डाटा नहीं है।<br><small>जब आप नया फॉर्म शुरू करेंगे, कुछ हटाएँगे या DOCX डाउनलोड करेंगे, तब पहले का डाटा यहाँ आ जाएगा।</small></div>'; return; }
+    box.innerHTML = list.map((it, i) => {
+      const m = histMeta(it.json), d = new Date(it.ts);
+      const when = d.toLocaleDateString("hi-IN", { day: "numeric", month: "short", year: "numeric" }) + " · " + d.toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" });
+      return '<div class="hist-item"><div class="hist-n">' + (i + 1) + '</div><div class="hist-info"><b>' + h(m.title) + "</b>" +
+        '<span>' + h(m.place ? m.place + " · " : "") + h(m.line) + '</span><small>' + h(when) + " · " + h(it.reason || "") + "</small></div>" +
+        '<div class="hist-act"><button type="button" class="btn primary sm" data-hact="restore" data-id="' + h(it.id) + '">खोलें</button>' +
+        '<button type="button" class="btn danger sm" data-hact="del" data-id="' + h(it.id) + '">हटाएँ</button></div></div>';
+    }).join("");
+  }
+  function histOpen() { histRender(); $("#histModal").hidden = false; }
+  function histClose() { $("#histModal").hidden = true; }
+  $("#btnHist").addEventListener("click", histOpen);
+  $("#histClose").addEventListener("click", histClose);
+  $("#histModal").addEventListener("click", (e) => { if (e.target.id === "histModal") histClose(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") histClose(); });
+  $("#histClear").addEventListener("click", () => {
+    if (!histLoad().length || !confirm("सारा पिछला डाटा हमेशा के लिए हट जाएगा। ठीक है?")) return;
+    histSave([]); histCount(); histRender();
+  });
+  $("#histList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-hact]"); if (!b) return;
+    const list = histLoad(), it = list.find((x) => x.id === b.dataset.id); if (!it) return;
+    if (b.dataset.hact === "del") { histSave(list.filter((x) => x.id !== it.id)); histCount(); histRender(); return; }
+    if (stateHasData(state) && !confirm("अभी का डाटा हट जाएगा (वो भी 'पिछला डाटा' में सेव रहेगा)। यह पिछला डाटा खोलें?")) return;
+    snapshot("पिछला डाटा खोलने से पहले");
+    try { state = normalize(JSON.parse(it.json)); } catch (err) { toast("यह डाटा खुल नहीं पाया", true); return; }
+    ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (err) {}
+    histClose(); render(); window.scrollTo({ top: 0 }); toast("पिछला डाटा खुल गया।");
   });
 
   /* ---------- डेमो डाटा (एक क्लिक में पूरा फॉर्म) ---------- */
@@ -426,7 +501,7 @@
     Object.assign(g3.plots[0].sch[2], chau);
     return normalize({
       header: { panchayat: "गणेशपुर", halka: "रीगा", mauja: "बखरी", thana_no: "251", anchal: "रीगा", police_thana: "रीगा", anumandal: "सीतामढ़ी सदर", rajasva_thana: "सीतामढ़ी सदर", jila: "सीतामढ़ी" },
-      schedules: names.map((n) => ({ name: n })), groups: [g1, g2, g3]
+      schedules: names.map((n, i) => ({ name: n, rel_type: "पिता", rel_naam: ["राम विलास राम", "गंगादेव राम", "बिफई राम", "स्व० शिवनाथ ठाकुर", "हरिनंदन प्रसाद"][i], jati: ["चमार", "चमार", "चमार", "ठाकुर", "तेली"][i], nivasi: "निज ग्राम" })), groups: [g1, g2, g3]
     });
   }
 
@@ -442,9 +517,10 @@
       a.href = URL.createObjectURL(blob); a.download = "batwara_panchnama.docx";
       document.body.appendChild(a); a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-      toast("DOCX तैयार — " + r.rowCount + " पंक्ति, " + r.schedCount + " अनुसूचि");
+      snapshot("DOCX डाउनलोड के समय"); toast("DOCX तैयार — " + r.rowCount + " पंक्ति, " + r.schedCount + " अनुसूचि");
     } catch (err) { toast(err.message || "DOCX नहीं बन पाया", true); }
   }
 
+  histCount();
   render();
 })();

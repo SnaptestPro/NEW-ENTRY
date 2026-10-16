@@ -21,6 +21,7 @@
   </div>
   <div class="top-actions">
     <span class="save-state" id="saveState">● स्वतः सेव चालू</span>
+    <button type="button" class="btn ghost" id="btnHist" title="पिछला सेव किया हुआ डाटा देखें / वापस लाएँ">🕘 पिछला डाटा <b id="histCount">0</b></button>
     <button type="button" class="btn ghost" id="btnDemo" title="सारा फॉर्म नमूना डाटा से एक क्लिक में भर दें">⚡ डेमो डाटा भरें</button>
     <button type="button" class="btn ghost" id="btnNew">नया फॉर्म</button>
     <button type="button" class="btn primary" id="btnDownload">
@@ -43,6 +44,14 @@
     <button type="button" class="btn primary" id="btnNext">अगला →</button>
   </div>
 </footer>
+
+<div id="histModal" class="modal" hidden>
+  <div class="modal-box" role="dialog" aria-label="पिछला डाटा">
+    <div class="modal-h"><div><h2>🕘 पिछला डाटा</h2><p>नया फॉर्म, डेमो, हटाने या DOCX डाउनलोड से पहले का डाटा अपने-आप यहाँ सेव होता है (अधिकतम पिछले 20)।</p></div><button type="button" class="btn ghost sm" id="histClose">✕ बंद</button></div>
+    <div class="modal-b" id="histList"></div>
+    <div class="modal-f"><button type="button" class="btn danger sm" id="histClear">सारा पिछला डाटा हटाएँ</button></div>
+  </div>
+</div>
 
 <div id="toast" class="toast"></div>
 

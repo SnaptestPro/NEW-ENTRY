@@ -88,7 +88,14 @@
   const PAL = [["BDD7EE", "DDEBF7"], ["C6E0B4", "E2EFDA"], ["FFE699", "FFF2CC"], ["F8CBAD", "FCE4D6"], ["D9C3F0", "EDE1F7"]];
   const PAL_LEFT = ["B4C6E7", "D9E2F3"], PAL_ABHI = ["D0CECE", "EDEDED"];
   function layout(st) {
-    const scheds = (st.schedules || []).map((s, i) => ({ idx: i, no: i + 1, name: t(s.name) }));
+    const scheds = (st.schedules || []).map((s, i) => {
+      const parts = [t(s.name)];
+      if (t(s.rel_naam)) parts.push((t(s.rel_type) || "पिता") + "-" + t(s.rel_naam));
+      const l2 = parts.filter(Boolean).join(" ");
+      const l3 = [t(s.jati) && "जाति:- " + t(s.jati), t(s.nivasi) && "निवासी:- " + t(s.nivasi)].filter(Boolean).join(" , ");
+      const detail = [l2, l3].filter(Boolean);
+      return { idx: i, no: i + 1, name: t(s.name), detail };
+    });
     if (!scheds.length) throw new Error("कम से कम एक अनुसूचि चाहिए।");
     const rows = flatten(st, scheds.length);
     if (!rows.length) throw new Error("कम से कम एक पंक्ति में डाटा भरें।");
@@ -145,7 +152,7 @@
       const palOf = (c, dark) => c.blk === undefined ? PAL_LEFT[dark ? 0 : 1] : c.blk === -2 ? PAL_ABHI[dark ? 0 : 1] : PAL[c.blk][dark ? 0 : 1];
       const labelSz = Math.min.apply(null, cols.filter((c) => c.id !== "abhi").map((c) => fitSz(c.label, c.w, 22, 11)));
       const hdr1 = [{ span: nLeft, lines: ["मोताविक जमाबंदी एवं मोताविक खतियान"], bold: true, shade: PAL_LEFT[0], sz: 20 }];
-      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम् " + b.sc.name], bold: true, shade: PAL[b.sc.idx % 5][0], sz: 19 }));
+      blocks.forEach((b) => hdr1.push({ span: b.span, lines: ["अनुसूचि ( Schedule ) सांख्या " + b.sc.no + " बनाम्"].concat(b.sc.detail), bold: true, shade: PAL[b.sc.idx % 5][0], sz: 19 }));
       if (showAbhi) hdr1.push({ span: 1, lines: ["अभियुक्ति"], bold: true, shade: PAL_ABHI[0], vm: "restart", head: 3, sz: 19 });
       const hdr2 = cols.map((c) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont", shade: PAL_ABHI[0] } : { span: 1, lines: c.label, bold: true, shade: palOf(c, false), sz: labelSz });
       const hdr3 = cols.map((c, i) => c.id === "abhi" ? { span: 1, lines: [], vm: "cont", shade: PAL_ABHI[0] } : { span: 1, lines: [String(i + 1)], shade: "F2F2F2", sz: Math.max(11, labelSz - 4) });
@@ -191,29 +198,34 @@
     return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length };
   }
 
-  /* ---------- पेज के ऊपर का शीर्षक-खंड ---------- */
+  /* ---------- पेज के ऊपर का शीर्षक-खंड (असली फॉर्म की तरह: दो box, भरी वैल्यू के नीचे रेखा) ---------- */
   // पेज जितना चौड़ा, अक्षर उतने बड़े (A3 = 1.0)
   function headerBlock(h, pageW) {
     const k = Math.max(0.8, Math.min(1.45, pageW / 23814));
     const S = (v) => Math.round(v * k / 2) * 2;
-    const val = (key) => t(h[key]) ? { t: t(h[key]), b: true } : { t: "………………" };
+    const NB = "\u00a0";
+    const val = (key, min) => {
+      const v = t(h[key]);
+      if (!v) return { t: "………" + "…".repeat(Math.max(0, (min || 10) - 6)) };
+      const pad = Math.max(2, Math.ceil(((min || 10) - v.length) / 2) + 1);
+      return { t: NB.repeat(pad) + v + NB.repeat(pad), b: true, u: true };
+    };
     const lab = (x) => ({ t: x });
     const paras = [
-      { runs: [{ t: "पंचनामा बँटवारा ( Schedule )", b: true }], sz: S(36), jc: "center", rule: true },
-      { runs: [{ t: "आपसी सहमति के आधार पर बँटवारा ( Partition ) का अनुसूचि प्रपत्र", b: true }], sz: S(24), jc: "center" },
-      { runs: [lab("ग्राम पंचायत राज : "), val("panchayat"), lab("          हल्का सांख्या : "), val("halka")], sz: S(24), jc: "center" },
+      { runs: [{ t: "पंचनामा बँटवारा ( Schedule )", b: true }], sz: S(34), jc: "center" },
+      { runs: [lab("आपसी सहमति के आधार पर बँटवारा ( Partition ) का अनुसूचि प्रपत्र , ग्राम पंचायत राज "), val("panchayat", 22), lab(" , हल्का सांख्या "), val("halka", 8)], sz: S(24), jc: "center" },
       { runs: [{ t: "स्थल पर दखल-कब्जा एवं जमाबंदी रकवा से मिलान कर खतियानी रकवा का जमाबंदी बँटवारा", b: true }], sz: S(22), jc: "center" }
     ];
-    const info = [["राजस्व ग्राम", "mauja"], ["थाना सांख्या", "thana_no"], ["अंचल", "anchal"], ["पुलिस थाना", "police_thana"], ["अनुमण्डल", "anumandal"], ["राजस्व थाना", "rajasva_thana"], ["जिला", "jila"]];
-    const runs = [];
-    info.forEach((x, i) => { if (i) runs.push({ t: "     |     " }); runs.push(lab(x[0] + " : ")); runs.push(val(x[1])); });
-    return { paras, info: { runs, sz: S(21) } };
+    const r = [];
+    r.push(lab("राजस्व ग्राम "), val("mauja", 16), lab(" , थाना सांख्या "), val("thana_no", 8), lab(" , अंचल "), val("anchal", 14),
+      lab(" , पुलिस थाना "), val("police_thana", 14), lab(" , अनुमण्डल "), val("anumandal", 16), lab(" , राजस्व थाना "), val("rajasva_thana", 16), lab(" , जिला "), val("jila", 14));
+    return { paras, info: { runs: r, sz: S(21) } };
   }
 
   /* ---------- DOCX renderer ---------- */
   const FONT = '<w:rFonts w:ascii="Mangal" w:hAnsi="Mangal" w:cs="Mangal" w:hint="cs"/>';
-  function run(text, sz, bold) {
-    return "<w:r><w:rPr>" + FONT + (bold ? "<w:b/><w:bCs/>" : "") +
+  function run(text, sz, bold, u) {
+    return "<w:r><w:rPr>" + FONT + (bold ? "<w:b/><w:bCs/>" : "") + (u ? '<w:u w:val="dotted"/>' : "") +
       '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/><w:lang w:bidi="hi-IN"/></w:rPr><w:t xml:space="preserve">' + esc(text) + "</w:t></w:r>";
   }
   function para(text, sz, jc, bold, extra) {
@@ -221,20 +233,21 @@
   }
   function paraRuns(runs, sz, jc, extra, before, after) {
     return '<w:p><w:pPr>' + (extra || "") + '<w:spacing w:before="' + (before || 0) + '" w:after="' + (after || 0) + '" w:line="240" w:lineRule="auto"/><w:jc w:val="' + jc + '"/></w:pPr>' +
-      runs.map((r) => run(r.t, sz, r.b)).join("") + "</w:p>";
+      runs.map((r) => run(r.t, sz, r.b, r.u)).join("") + "</w:p>";
   }
   const sectPr = (c) => '<w:sectPr><w:pgSz w:w="' + c.pageW + '" w:h="' + c.pageH + '" w:orient="landscape"/>' +
     '<w:pgMar w:top="720" w:right="' + MARGIN + '" w:bottom="720" w:left="' + MARGIN + '" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>';
 
   function docxHeader(hb, total) {
-    const rule = '<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="2" w:color="1F3864"/></w:pBdr>';
-    const ps = hb.paras.map((p, i) => paraRuns(p.runs, p.sz, p.jc, p.rule ? rule : "", i === 0 ? 0 : 40, i === 0 ? 60 : 0)).join("");
-    const box = '<w:tbl><w:tblPr><w:tblW w:w="' + total + '" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>' +
-      ["top", "left", "bottom", "right"].map((b) => "<w:" + b + ' w:val="single" w:sz="8" w:space="0" w:color="1F3864"/>').join("") +
-      '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="' + total + '"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="' + total +
-      '" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="EEF2F9"/><w:tcMar><w:top w:w="70" w:type="dxa"/><w:bottom w:w="70" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>' +
-      paraRuns(hb.info.runs, hb.info.sz, "center") + "</w:tc></w:tr></w:tbl>";
-    return ps + para("", 8, "left") + box + para("", 8, "left");
+    const bd = (n) => "<w:" + n + ' w:val="single" w:sz="10" w:space="0" w:color="1F3864"/>';
+    const tcw = '<w:tcW w:w="' + total + '" w:type="dxa"/>';
+    const ps = hb.paras.map((p, i) => paraRuns(p.runs, p.sz, p.jc, "", i === 0 ? 0 : 50, 0)).join("");
+    return '<w:tbl><w:tblPr><w:tblW w:w="' + total + '" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>' +
+      bd("top") + bd("left") + bd("bottom") + bd("right") + bd("insideH") +
+      '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="' + total + '"/></w:tblGrid>' +
+      "<w:tr><w:tc><w:tcPr>" + tcw + '<w:tcMar><w:top w:w="90" w:type="dxa"/><w:bottom w:w="90" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>' + ps + "</w:tc></w:tr>" +
+      "<w:tr><w:tc><w:tcPr>" + tcw + '<w:shd w:val="clear" w:color="auto" w:fill="EEF2F9"/><w:tcMar><w:top w:w="110" w:type="dxa"/><w:bottom w:w="110" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>' +
+      paraRuns(hb.info.runs, hb.info.sz, "center") + "</w:tc></w:tr></w:tbl>" + para("", 10, "left");
   }
 
   function docxCell(cell, w) {
@@ -286,7 +299,7 @@
     const cellHtml = (tag, cell, rs) => "<" + tag + (cell.span > 1 ? ' colspan="' + cell.span + '"' : "") + (rs > 1 ? ' rowspan="' + rs + '"' : "") +
       ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t" : "") + '" style="font-size:' + ((cell.sz || 18) / 2) + "pt" + (cell.shade ? ";background:#" + cell.shade : "") + (cell.bold ? ";font-weight:700" : "") + '">' +
       cell.lines.map((l, i) => (cell.boldFirst && i === 0 ? "<b>" + esc(l) + "</b>" : esc(l))).join("<br>") + "</" + tag + ">";
-    const runsHtml = (runs) => runs.map((r) => r.b ? "<b>" + esc(r.t) + "</b>" : esc(r.t)).join("").replace(/ {2,}/g, (m) => "&nbsp;".repeat(m.length));
+    const runsHtml = (runs) => runs.map((r) => { let x = esc(r.t).replace(/\u00a0/g, "&nbsp;"); if (r.b) x = "<b>" + x + "</b>"; if (r.u) x = '<span class="pv-u">' + x + "</span>"; return x; }).join("");
     return L.chunks.map((ch, ci) => {
       const hb = headerBlock(L.header, ch.pageW);
       const cg = "<colgroup>" + ch.cols.map((c) => '<col style="width:' + (c.w / 15).toFixed(1) + 'px">').join("") + "</colgroup>";
@@ -301,7 +314,7 @@
       return '<div class="pv-page"><div class="pv-bar"><span class="pv-cap">पेज ' + (ci + 1) + " / " + L.chunks.length + " · " + ch.cols.length + ' कॉलम</span>' +
         '<button type="button" class="btn ghost sm" data-act="pvToggle">पूरा आकार / स्क्रीन में फिट</button></div>' +
         '<div class="pv-scroll" data-pw="' + pw + '"><div class="pv-zoom"><div class="pv-sheet" style="width:' + pw + 'px">' +
-        '<div class="pv-head">' + hb.paras.map((p) => '<div class="' + (p.rule ? "rule" : "") + '" style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") +
+        '<div class="pv-head">' + '<div class="pv-box">' + hb.paras.map((p) => '<div style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") + "</div>" +
         '<div class="pv-info" style="font-size:' + (hb.info.sz / 2) + 'pt">' + runsHtml(hb.info.runs) + "</div></div>" +
         '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table></div></div></div></div>";
     }).join("");
