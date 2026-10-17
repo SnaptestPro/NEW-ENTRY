@@ -484,13 +484,14 @@
     render(); window.scrollTo({ top: 0 }); toast("डेमो डाटा भर गया — नीचे नमूना देखें, फिर DOCX डाउनलोड करें।");
   });
   $("#btnNew").addEventListener("click", () => {
-    if (!confirm("सभी अनुसूचियाँ और पंक्तियाँ साफ़ हो जाएँगी (गाँव / थाना विवरण बचा रहेगा)। नया फॉर्म शुरू करें?")) return;
+    const hasData = stateHasData(state) || Object.keys(state.header || {}).some((k) => String(state.header[k] || "").trim());
+    if (hasData && !confirm("अभी का सारा डाटा (गाँव / थाना विवरण, अनुसूचियाँ, पंक्तियाँ) साफ़ हो जाएगा और पहले स्टेप से नया फॉर्म शुरू होगा।\n\nपुराना डाटा 'पिछला डाटा' में सेव रहेगा। ठीक है?")) return;
     snapshot("नया फॉर्म शुरू करने से पहले"); detachCase();
-    const hd = state.header, op = state.opts;
-    state = normalize(freshState()); state.header = hd; state.opts = op;
-    ui.step = 1; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
+    const op = state.opts;                       // सिर्फ़ DOCX/PDF की सेटिंग (पेज नंबर, साइज़ आदि) रखी गई है
+    state = normalize(freshState()); state.opts = op;
+    ui.step = 0; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {}; ui.pick = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    render(); toast("नया फॉर्म तैयार है।");
+    render(); window.scrollTo({ top: 0 }); toast("नया खाली फॉर्म तैयार है — पहले स्टेप (गाँव / थाना विवरण) से शुरू करें।");
   });
 
   /* ---------- पिछला डाटा (history): पिछले 20 तक, browser में सेव ---------- */
