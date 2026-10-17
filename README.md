@@ -11,6 +11,15 @@ Plain HTML/CSS/JS — koi backend nahi. `index.html` browser me kholo. Data brow
 ## Purani DOCX dobara kholna
 Is site se bani DOCX ke andar poora form-data chhupa rehta hai. Upar "DOCX से खोलें" dabakar (ya DOCX ko page par drag karke) wahi file chunein — sab data waisa hi bhar jaata hai. Sirf naye version se bani DOCX khulti hai.
 
+## Naye features
+- **Hissa apne aap baantna:** khesra ka kul rakba bharo, anusuchi par ✓ lagao, "kul rakba barabar baanto" dabao. "baaki rakba ise do" bacha hua rakba ek anusuchi me daal deta hai.
+- **Kul jod ki jaanch:** Step 4 me raiyat-wise aur anusuchi-wise total aur mismatch.
+- **DOCX/PDF setting:** page number, hastakshar ke khane, kul jod ki pankti, kagaz ka size (auto / A4 / A3 / Legal). "PDF / print" browser ke print se PDF banata hai.
+- **Mere case:** naam dekar case save, search, open, copy, delete; backup file (.json) export/import.
+- **Cloud backup (optional):** `firebase-config.js` me Firebase config daalne par Google login se cases sync hote hain.
+- **Hindi typing:** English me likho (rajesh kumar), khana chhodte hi Hindi ban jaata hai. Lambi 'aa' ke liye aa likho. Menu me on/off.
+- **Awaaz se bharna:** khane me click karke 🎤 dabao (Chrome/Edge/Safari).
+
 ## DOCX result ke niyam
 - Pankti = jitni khesra entry bhari, utni hi (fixed 5 nahi).
 - Naam/pita/pata ek baar, us raiyat ki saari panktiyon me merge.

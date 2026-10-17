@@ -9,6 +9,15 @@
 (function (root) {
 
   const MAX_SCHED_PER_PAGE = 5;
+  const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
+  const PAPER = { A4: [16838, 11906, 2], A3: [23811, 16838, 3], Legal: [20160, 12240, 2] };   // landscape: चौड़ाई, ऊँचाई, एक पेज पर अनुसूचि
+  function getOpts(st) {
+    const o = (st && st.opts) || {};
+    return { pageNo: o.pageNo !== false, sign: !!o.sign, signLabels: o.signLabels != null ? String(o.signLabels) : DEFAULT_SIGN,
+      totalRow: !!o.totalRow, paper: PAPER[o.paper] ? o.paper : "auto" };
+  }
+  const toDec = (ac, dc) => { ac = t(ac); dc = t(dc); if (!ac && !dc) return null; return (parseFloat(ac) || 0) * 100 + (parseFloat(dc) || 0); };
+  const fmtDec = (v) => { v = Math.round(v * 100) / 100; const a = Math.floor(v / 100 + 1e-9); return rk(String(a), String(Math.round((v - a * 100) * 100) / 100)); };
   const MARGIN = 360;                 // बाएँ/दाएँ margin (twips)
   const PAGE_MIN_W = 16838;           // A4 landscape
   const PAGE_MAX_W = 31680;           // Word की अधिकतम चौड़ाई (22 इंच)
@@ -51,10 +60,10 @@
       (g.plots || []).filter(plotHasData).forEach((p, pi) => {
         rows.push({
           gi, nameLines, jamabandi: t(p.jamabandi), khata: t(p.khata), khesra: t(p.khesra),
-          k: rk(p.k_ac, p.k_dc), n: rk(p.n_ac, p.n_dc), abhiyukti: t(p.abhiyukti),
+          k: rk(p.k_ac, p.k_dc), n: rk(p.n_ac, p.n_dc), kd: toDec(p.k_ac, p.k_dc), nd: toDec(p.n_ac, p.n_dc), abhiyukti: t(p.abhiyukti),
           sch: Array.from({ length: n }, (_, s) => {
             const x = (p.sch && p.sch[s]) || {};
-            return { khata: t(x.khata), khesra: t(x.khesra), k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
+            return { khata: t(x.khata), khesra: t(x.khesra), k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), kd: toDec(x.k_ac, x.k_dc), nd: toDec(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
           })
         });
       });
@@ -111,7 +120,8 @@
     });
     const showAbhi = any((r) => r.abhiyukti);
 
-    const chunks = splitEven(scheds, MAX_SCHED_PER_PAGE).map((schedChunk) => {
+    const opts = getOpts(st), fixed = PAPER[opts.paper];
+    const chunks = splitEven(scheds, fixed ? fixed[2] : MAX_SCHED_PER_PAGE).map((schedChunk) => {
       const cols = [];
       cols.push({ id: "name", label: ["खतियानी रैयत का", "नाम व पता"], w: W.name });
       if (showLeft.jam) cols.push({ id: "jam", label: ["जमाबंदी", "सांख्या"], w: W.jam });
@@ -135,7 +145,7 @@
 
       // पेज की चौड़ाई: कॉलम जितने, पेज उतना (A4 landscape से 22 इंच तक)
       const natural = cols.reduce((a, c) => a + c.w, 0);
-      const pageW = Math.max(PAGE_MIN_W, Math.min(PAGE_MAX_W, natural + 2 * MARGIN));
+      const pageW = fixed ? fixed[0] : Math.max(PAGE_MIN_W, Math.min(PAGE_MAX_W, natural + 2 * MARGIN));
       const usable = pageW - 2 * MARGIN;
       const scale = Math.min(MAX_SCALE, usable / natural);
       cols.forEach((c) => { c.w = Math.round(c.w * scale); });
@@ -146,7 +156,7 @@
       const raw = cols.reduce((a, c) => a + c.w, 0);
       if (raw > usable) cols.forEach((c) => { c.w = Math.floor(c.w * usable / raw); });
       const total = cols.reduce((a, c) => a + c.w, 0);
-      const pageH = Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
+      const pageH = fixed ? fixed[1] : Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
       const wAt = (from, span) => cols.slice(from, from + span).reduce((a, c) => a + c.w, 0);
 
       const palOf = (c, dark) => c.blk === undefined ? PAL_LEFT[dark ? 0 : 1] : c.blk === -2 ? PAL_ABHI[dark ? 0 : 1] : PAL[c.blk][dark ? 0 : 1];
@@ -183,6 +193,18 @@
         }
         return cell;
       }));
+      if (opts.totalRow) {
+        const sum = (get) => { let tot = null; rows.forEach((r) => { const v = get(r); if (v != null) tot = (tot || 0) + v; }); return tot == null ? [] : [fmtDec(tot)]; };
+        bodyRows.push(cols.map((c) => {
+          const cell = { span: 1, lines: [], bold: true, shade: "F2F2F2" };
+          if (c.id === "name") { cell.lines = ["कुल जोड़"]; cell.jc = "left"; }
+          else if (c.id === "k") cell.lines = sum((r) => r.kd);
+          else if (c.id === "n") cell.lines = sum((r) => r.nd);
+          else if (c.id === "s_k") cell.lines = sum((r) => r.sch[c.s].kd);
+          else if (c.id === "s_n") cell.lines = sum((r) => r.sch[c.s].nd);
+          return cell;
+        }));
+      }
       // एक जैसे अक्षर-साइज़: संख्या वाले सारे कॉलम एक साइज़, बाकी अपने-अपने
       const NUM = ["jam", "khata", "khesra", "k", "n", "s_khata", "s_khesra", "s_k", "s_n"];
       const colLines = (ci) => [].concat.apply([], bodyRows.map((r) => r[ci].lines));
@@ -192,10 +214,10 @@
         const sz = NUM.indexOf(c.id) >= 0 ? numSz : fitSz(colLines(ci), c.w, base, 10);
         bodyRows.forEach((r) => { r[ci].sz = sz; });
       });
-      bodyRows.forEach((r) => { r.forEach((cell, ci) => { if (cols[ci].id === "name") cell.boldFirst = true; }); });
+      bodyRows.forEach((r, ri) => { r.forEach((cell, ci) => { if (cols[ci].id === "name" && !(opts.totalRow && ri === bodyRows.length - 1)) cell.boldFirst = true; }); });
       return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows };
     });
-    return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length };
+    return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length, opts, signLabels: opts.sign ? opts.signLabels.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(0, 6) : [] };
   }
 
   /* ---------- पेज के ऊपर का शीर्षक-खंड (असली फॉर्म की तरह: दो box, भरी वैल्यू के नीचे रेखा) ---------- */
@@ -235,8 +257,26 @@
     return '<w:p><w:pPr>' + (extra || "") + '<w:spacing w:before="' + (before || 0) + '" w:after="' + (after || 0) + '" w:line="240" w:lineRule="auto"/><w:jc w:val="' + jc + '"/></w:pPr>' +
       runs.map((r) => run(r.t, sz, r.b, r.u)).join("") + "</w:p>";
   }
-  const sectPr = (c) => '<w:sectPr><w:pgSz w:w="' + c.pageW + '" w:h="' + c.pageH + '" w:orient="landscape"/>' +
+  const sectPr = (c, ftr) => '<w:sectPr>' + (ftr ? '<w:footerReference w:type="default" r:id="rIdBatwFooter"/>' : "") + '<w:pgSz w:w="' + c.pageW + '" w:h="' + c.pageH + '" w:orient="landscape"/>' +
     '<w:pgMar w:top="720" w:right="' + MARGIN + '" w:bottom="720" w:left="' + MARGIN + '" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>';
+
+  function docxSign(labels, total) {
+    if (!labels.length) return "";
+    const n = labels.length, w = Math.floor(total / n);
+    const place = paraRuns([{ t: "स्थान : ……………………………          दिनांक : ……………………………" }], 20, "left", "<w:keepNext/>", 360, 0);
+    const cells = labels.map(() => "").map((_, i) => '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/><w:tcMar><w:left w:w="260" w:type="dxa"/><w:right w:w="260" w:type="dxa"/></w:tcMar><w:vAlign w:val="bottom"/></w:tcPr>' +
+      para("", 20, "center", false, "<w:keepNext/>") +
+      paraRuns([{ t: labels[i], b: true }], 18, "center", '<w:pBdr><w:top w:val="single" w:sz="8" w:space="4" w:color="000000"/></w:pBdr>', 0, 0) + "</w:tc>").join("");
+    return place + '<w:tbl><w:tblPr><w:tblW w:w="' + (w * n) + '" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>' +
+      labels.map(() => '<w:gridCol w:w="' + w + '"/>').join("") + '</w:tblGrid><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="1300" w:hRule="atLeast"/></w:trPr>' + cells + "</w:tr></w:tbl>" + para("", 10, "left");
+  }
+  function footerXml() {
+    const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
+    const r = (x, b) => '<w:r><w:rPr>' + FONT + (b ? "<w:b/>" : "") + '<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>' + x + "</w:r>";
+    const fld = (code) => '<w:r><w:rPr>' + FONT + '<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:rPr>' + FONT + '<w:sz w:val="20"/></w:rPr><w:instrText xml:space="preserve"> ' + code + ' </w:instrText></w:r><w:r><w:rPr>' + FONT + '<w:sz w:val="20"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>' + r("<w:t>1</w:t>", true) + '<w:r><w:rPr>' + FONT + '<w:sz w:val="20"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r>';
+    return H + '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr>' +
+      r('<w:t xml:space="preserve">पृष्ठ </w:t>') + fld("PAGE") + r('<w:t xml:space="preserve"> / </w:t>') + fld("NUMPAGES") + "</w:p></w:ftr>";
+  }
 
   function docxHeader(hb, total) {
     const bd = (n) => "<w:" + n + ' w:val="single" w:sz="10" w:space="0" w:color="1F3864"/>';
@@ -315,19 +355,28 @@
     let doc = await zip.file("word/document.xml").async("string");
     const bStart = doc.indexOf("<w:body>") + "<w:body>".length;
     const sectStart = doc.lastIndexOf("<w:sectPr");
+    const ftr = L.opts.pageNo;
     const body = L.chunks.map((ch, i) => {
       const last = i === L.chunks.length - 1;
       return docxHeader(headerBlock(L.header, ch.pageW), ch.total) + docxTable(ch) +
-        (last ? para("", 10, "left") : "<w:p><w:pPr>" + sectPr(ch) + "</w:pPr></w:p>");
+        (last ? para("", 10, "left") + docxSign(L.signLabels, ch.total) : "<w:p><w:pPr>" + sectPr(ch, ftr) + "</w:pPr></w:p>");
     }).join("");
-    doc = doc.slice(0, bStart) + body + sectPr(L.chunks[L.chunks.length - 1]) + "</w:body></w:document>";
+    doc = doc.slice(0, bStart) + body + sectPr(L.chunks[L.chunks.length - 1], ftr) + "</w:body></w:document>";
+    if (ftr) {
+      zip.file("word/footer1.xml", footerXml());
+      let rl = await zip.file("word/_rels/document.xml.rels").async("string");
+      zip.file("word/_rels/document.xml.rels", rl.replace("</Relationships>", '<Relationship Id="rIdBatwFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>'));
+      let ct = await zip.file("[Content_Types].xml").async("string");
+      zip.file("[Content_Types].xml", ct.replace("</Types>", '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>'));
+    }
     zip.file("word/document.xml", doc);
     await embedState(zip, st);
     return { zip, pageCount: L.chunks.length, rowCount: L.rowCount, schedCount: L.schedCount };
   }
 
   /* ---------- HTML preview ---------- */
-  function previewHtml(st) {
+  function previewHtml(st, popts) {
+    const print = !!(popts && popts.print);
     const L = layout(st);
     const cellHtml = (tag, cell, rs) => "<" + tag + (cell.span > 1 ? ' colspan="' + cell.span + '"' : "") + (rs > 1 ? ' rowspan="' + rs + '"' : "") +
       ' class="' + (cell.jc === "left" ? "l " : "") + (cell.va === "top" ? "t" : "") + '" style="font-size:' + ((cell.sz || 18) / 2) + "pt" + (cell.shade ? ";background:#" + cell.shade : "") + (cell.bold ? ";font-weight:700" : "") + '">' +
@@ -344,16 +393,32 @@
         return cellHtml("td", cell, rs);
       }).join("") + "</tr>").join("");
       const pw = Math.round(ch.total / 15);
+      const signHtml = (ci === L.chunks.length - 1 && L.signLabels.length)
+        ? '<div class="pv-place">स्थान : ……………………………&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;दिनांक : ……………………………</div><div class="pv-sign" style="width:' + pw + 'px">' + L.signLabels.map((l) => "<div><span>" + esc(l) + "</span></div>").join("") + "</div>" : "";
+      const footHtml = L.opts.pageNo ? '<div class="pv-foot">पृष्ठ ' + (ci + 1) + " / " + L.chunks.length + "</div>" : "";
+      if (print) return '<section class="pv-print pg' + ci + '"><div class="pv-sheet" style="width:' + pw + 'px">' +
+        '<div class="pv-head"><div class="pv-box">' + hb.paras.map((p) => '<div style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") + "</div>" +
+        '<div class="pv-info" style="font-size:' + (hb.info.sz / 2) + 'pt">' + runsHtml(hb.info.runs) + "</div></div>" +
+        '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table>" + signHtml + "</div></section>";
       return '<div class="pv-page"><div class="pv-bar"><span class="pv-cap">पेज ' + (ci + 1) + " / " + L.chunks.length + " · " + ch.cols.length + ' कॉलम</span>' +
         '<button type="button" class="btn ghost sm" data-act="pvToggle">पूरा आकार / स्क्रीन में फिट</button></div>' +
         '<div class="pv-scroll" data-pw="' + pw + '"><div class="pv-zoom"><div class="pv-sheet" style="width:' + pw + 'px">' +
         '<div class="pv-head">' + '<div class="pv-box">' + hb.paras.map((p) => '<div style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") + "</div>" +
         '<div class="pv-info" style="font-size:' + (hb.info.sz / 2) + 'pt">' + runsHtml(hb.info.runs) + "</div></div>" +
-        '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table></div></div></div></div>";
+        '<table class="pv" style="width:' + pw + 'px">' + cg + "<thead>" + head + "</thead><tbody>" + bodyRows + "</tbody></table>" + signHtml + footHtml + "</div></div></div></div>";
     }).join("");
   }
 
-  root.BatwaraDocx = { build, layout, previewHtml, extractState };
+  // PDF / प्रिंट: हर पेज का अपना @page साइज़ (named pages) + पृष्ठ संख्या
+  function printHtml(st) {
+    const L = layout(st);
+    const mm = (tw) => (tw / 1440 * 25.4).toFixed(1) + "mm";
+    const foot = L.opts.pageNo ? ' @bottom-center { content: "पृष्ठ " counter(page) " / " counter(pages); font: 10pt Mangal, "Nirmala UI", "Noto Sans Devanagari", sans-serif; }' : "";
+    const css = L.chunks.map((ch, i) => "@page pg" + i + " { size: " + mm(ch.pageW) + " " + mm(ch.pageH) + "; margin: 12mm 6mm 14mm 6mm;" + foot + " } .pv-print.pg" + i + " { page: pg" + i + "; }").join("\n");
+    return { html: previewHtml(st, { print: true }), css };
+  }
+
+  root.BatwaraDocx = { build, layout, previewHtml, printHtml, extractState };
   if (typeof module !== "undefined" && module.exports) module.exports = root.BatwaraDocx;
 
 })(typeof window !== "undefined" ? window : globalThis);

@@ -36,8 +36,10 @@
   const blankSched = () => ({ name: "", rel_type: "पिता", rel_naam: "", jati: "", nivasi: "निज ग्राम" });
   const freshState = () => ({ header: {}, schedules: [blankSched()], groups: [blankGroup(1)] });
 
+  const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
   function normalize(st) {
     st.header = st.header || {};
+    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN }, st.opts || {});
     if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [blankSched()];
     st.schedules.forEach((x) => { if (x.rel_type == null) x.rel_type = "पिता"; ["rel_naam", "jati", "nivasi"].forEach((k) => { if (x[k] == null) x[k] = ""; }); });
     if (!Array.isArray(st.groups) || !st.groups.length) st.groups = [blankGroup(st.schedules.length)];
@@ -70,7 +72,7 @@
   }
 
   let state = load();
-  const ui = { step: 0, openGroup: 0, openPlot: {}, schTab: {} };
+  const ui = { step: 0, openGroup: 0, openPlot: {}, schTab: {}, pick: {} };
 
   let saveTimer = null;
   function save() {
@@ -78,7 +80,7 @@
     el.textContent = "● सेव हो रहा है…"; el.classList.add("saving");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      try { localStorage.setItem(KEY, JSON.stringify(state)); el.textContent = "● स्वतः सेव हो गया"; }
+      try { localStorage.setItem(KEY, JSON.stringify(state)); el.textContent = "● स्वतः सेव हो गया"; caseTouch(); }
       catch (e) { el.textContent = "● सेव नहीं हो पाया"; }
       el.classList.remove("saving");
     }, 350);
@@ -207,6 +209,44 @@
     const n = g.plots.filter(plotHasData).length;
     return "<b>" + h(gName(g)) + "</b><small>" + (n ? n + " खेसरा पंक्ति" : "पंक्ति भरी नहीं") + "</small>";
   }
+  function pickOf(gi, pi) {
+    const key = gi + "-" + pi, n = state.schedules.length;
+    if (!ui.pick[key] || ui.pick[key].length !== n) {
+      const sch = state.groups[gi].plots[pi].sch;
+      const has = sch.map((x) => ["k_ac", "k_dc", "n_ac", "n_dc"].some((q) => String(x[q] || "").trim()));
+      ui.pick[key] = has.some(Boolean) ? has : sch.map(() => true);
+    }
+    return ui.pick[key];
+  }
+  // दशमलव (डिसमिल) → रकवा के दो हिस्से
+  const splitDec = (v) => { v = Math.max(0, Math.round(v * 100) / 100); const a = Math.floor(v / 100 + 1e-9); return { ac: String(a), dc: String(Math.round((v - a * 100) * 100) / 100) }; };
+  function setShare(plot, k, kv, nv) {
+    const x = plot.sch[k];
+    if (kv != null) { const s = splitDec(kv); x.k_ac = s.ac; x.k_dc = s.dc; }
+    if (nv != null) { const s = splitDec(nv); x.n_ac = s.ac; x.n_dc = s.dc; }
+    if (!String(x.khata || "").trim()) x.khata = plot.khata || "";
+    if (!String(x.khesra || "").trim()) x.khesra = plot.khesra || "";
+  }
+  function clearShare(plot, k) { const x = plot.sch[k]; x.k_ac = x.k_dc = x.n_ac = x.n_dc = ""; }
+  function splitEqual(gi, pi) {
+    const plot = state.groups[gi].plots[pi], pk = pickOf(gi, pi), idx = pk.map((v, k) => (v ? k : -1)).filter((k) => k >= 0);
+    const kT = toD(plot.k_ac, plot.k_dc), nT = toD(plot.n_ac, plot.n_dc);
+    if (!idx.length) { toast("पहले उन अनुसूचियों पर ✓ लगाएँ जिनमें हिस्सा है।", true); return; }
+    if (kT == null && nT == null) { toast("पहले ऊपर कुल रकवा (खतियानी/नक्शा) भरें।", true); return; }
+    const part = (T) => { if (T == null) return null; const cents = Math.round(T * 100), base = Math.floor(cents / idx.length), rem = cents - base * idx.length; return idx.map((_, i) => (base + (i < rem ? 1 : 0)) / 100); };
+    const kp = part(kT), np = part(nT);
+    plot.sch.forEach((_, k) => { const at = idx.indexOf(k); if (at < 0) clearShare(plot, k); else setShare(plot, k, kp ? kp[at] : null, np ? np[at] : null); });
+    save(); render(); toast("रकवा " + idx.length + " अनुसूचि में बराबर बँट गया।");
+  }
+  function fillRest(gi, pi, k) {
+    const plot = state.groups[gi].plots[pi], kT = toD(plot.k_ac, plot.k_dc), nT = toD(plot.n_ac, plot.n_dc);
+    if (kT == null && nT == null) { toast("पहले ऊपर कुल रकवा भरें।", true); return; }
+    let kO = 0, nO = 0;
+    plot.sch.forEach((x, q) => { if (q === k) return; kO += toD(x.k_ac, x.k_dc) || 0; nO += toD(x.n_ac, x.n_dc) || 0; });
+    setShare(plot, k, kT == null ? null : Math.max(0, kT - kO), nT == null ? null : Math.max(0, nT - nO));
+    pickOf(gi, pi)[k] = true;
+    save(); render(); toast("बाकी रकवा अनुसूचि " + (k + 1) + " में डाल दिया।");
+  }
   function schCard(gi, pi, k) {
     const SP = "groups." + gi + ".plots." + pi + ".sch." + k + ".";
     const sc = state.schedules[k], x = state.groups[gi].plots[pi].sch[k];
@@ -215,11 +255,14 @@
     const chau = '<div class="chau">' + dirs.map((d) => '<span class="dir">' + d[0] + "</span>" +
       '<input type="text" placeholder="नाम" data-p="' + SP + d[1] + '" value="' + h(getP(SP + d[1])) + '">' +
       '<input type="text" placeholder="खेसरा" data-p="' + SP + d[1] + '_ref" value="' + h(getP(SP + d[1] + "_ref")) + '">').join("") + "</div>";
-    return '<div class="sch-card c' + (k % 5) + (has ? " filled" : "") + '"><div class="sch-card-h"><b>' + (k + 1) + "</b><span>" + (h(sc.name) || "अनुसूचि " + (k + 1)) + "</span></div>" +
+    const pk = pickOf(gi, pi);
+    return '<div class="sch-card c' + (k % 5) + (has ? " filled" : "") + '"><div class="sch-card-h"><b>' + (k + 1) + "</b><span>" + (h(sc.name) || "अनुसूचि " + (k + 1)) + "</span>" +
+      '<label class="pick" title="इस खेसरा में इस अनुसूचि का हिस्सा है"><input type="checkbox" data-pick="' + gi + "-" + pi + "-" + k + '"' + (pk[k] ? " checked" : "") + "> हिस्सा</label></div>" +
       '<div class="sch-card-b"><div class="mini2">' +
       fld(SP + "khata", "खाता") + fld(SP + "khesra", "खेसरा") + "</div>" +
       rk(SP + "k_ac", SP + "k_dc", "खतियानी रकवा", "sm") + rk(SP + "n_ac", SP + "n_dc", "नक्शा रकवा", "sm") +
       fld(SP + "min_janib", "मिन जानिब") +
+      '<button type="button" class="btn soft sm rest" data-act="restFill" data-g="' + gi + '" data-p="' + pi + '" data-s="' + k + '">⤵ बाकी रकवा इसे दो</button>' +
       '<details class="chau-box"' + (/north|south|east|west/.test(Object.keys(x).filter((q) => String(x[q] || "").trim()).join()) ? " open" : "") + "><summary>चौहद्दी (उ॰ द॰ पू॰ प॰)</summary>" + chau + "</details></div></div>";
   }
   function plotForm(gi, pi, r) {
@@ -231,6 +274,7 @@
       rk(P + "k_ac", P + "k_dc", "खतियानी रकवा", "sm") + rk(P + "n_ac", P + "n_dc", "नक्शा रकवा", "sm") +
       "</div></div>" +
       '<div class="sec"><div class="sec-t">अनुसूचि-वार बँटवारा <small>जिस अनुसूचि में हिस्सा नहीं है उसे खाली छोड़ दें</small></div>' +
+      '<div class="split-bar"><span>जिन अनुसूचियों में हिस्सा है उन पर ✓ लगाएँ, फिर →</span><button type="button" class="btn primary sm" data-act="splitEq" data-g="' + gi + '" data-p="' + pi + '">⚖ कुल रकवा बराबर बाँटो</button></div>' +
       '<div class="sch-grid">' + state.schedules.map((_, k) => schCard(gi, pi, k)).join("") + "</div>" +
       '<div class="bal" data-bal="' + key + '">' + balHtml(r) + "</div></div>" +
       '<div class="sec"><div class="grid g2">' + fld(P + "abhiyukti", "अभियुक्ति (वैकल्पिक)", { cls: "span2" }) + "</div></div></div>";
@@ -271,6 +315,42 @@
       cards + '<button type="button" class="add-row" data-act="addGroup">+ नया रैयत जोड़ें</button>';
   }
 
+  /* ---------- Step 4 : सेटिंग + कुल जोड़ ---------- */
+  function optionsCard() {
+    const o = state.opts;
+    const fixed = { A4: 2, A3: 3, Legal: 2 }[o.paper];
+    return '<div class="card"><div class="card-h"><div><h2>DOCX / PDF सेटिंग</h2><div class="hint">ये सेटिंग DOCX और PDF दोनों पर लागू होती हैं।</div></div></div><div class="card-b">' +
+      '<div class="opt-grid">' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.pageNo"' + (o.pageNo ? " checked" : "") + '> पृष्ठ संख्या (नीचे "पृष्ठ 1 / 2")</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.totalRow"' + (o.totalRow ? " checked" : "") + '> अंत में <b>कुल जोड़</b> की पंक्ति</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.sign"' + (o.sign ? " checked" : "") + '> <b>हस्ताक्षर</b> के खाने (अंतिम पेज पर)</label>' +
+      '<div class="fld"><span>कागज़ का साइज़ (लैंडस्केप)</span><select data-p="opts.paper">' +
+      [["auto", "अपने-आप (कॉलम के हिसाब से)"], ["A4", "A4"], ["A3", "A3"], ["Legal", "Legal"]].map((x) => '<option value="' + x[0] + '"' + (o.paper === x[0] ? " selected" : "") + ">" + x[1] + "</option>").join("") + "</select></div></div>" +
+      (fixed ? '<div class="note">इस साइज़ पर एक पेज में अधिकतम <b>' + fixed + '</b> अनुसूचि आएँगी; ज़्यादा हों तो अगला पेज बनेगा।</div>' : "") +
+      (o.sign ? '<div class="fld" style="margin-top:12px"><span>हस्ताक्षर के खाने — हर लाइन में एक नाम (अधिकतम 6)</span><textarea data-p="opts.signLabels" rows="5">' + h(o.signLabels) + "</textarea></div>" : "") +
+      "</div></div>";
+  }
+  function totalsCard(flat) {
+    if (!flat.length) return "";
+    let kAll = 0, nAll = 0, kS = 0, nS = 0;
+    const per = state.schedules.map(() => ({ k: 0, n: 0 }));
+    const byG = {};
+    flat.forEach((x) => {
+      const k = toD(x.p.k_ac, x.p.k_dc) || 0, n = toD(x.p.n_ac, x.p.n_dc) || 0;
+      kAll += k; nAll += n;
+      const g = byG[x.gi] || (byG[x.gi] = { name: (x.g.name || "").trim() || "नाम नहीं", k: 0, n: 0, ks: 0, ns: 0 });
+      g.k += k; g.n += n;
+      x.p.sch.forEach((s, q) => { const a = toD(s.k_ac, s.k_dc) || 0, b = toD(s.n_ac, s.n_dc) || 0; per[q].k += a; per[q].n += b; kS += a; nS += b; g.ks += a; g.ns += b; });
+    });
+    const diff = (a, b) => Math.abs(a - b) < 0.005 ? '<span class="okc">✓ बराबर</span>' : '<span class="badc">' + (a > b ? "बाकी " + fmtD(a - b) : "अधिक " + fmtD(b - a)) + "</span>";
+    const gRows = Object.keys(byG).map((i) => { const g = byG[i]; return "<tr><td>" + h(g.name) + "</td><td>" + fmtD(g.k) + "</td><td>" + fmtD(g.ks) + "</td><td>" + diff(g.k, g.ks) + "</td><td>" + fmtD(g.n) + "</td><td>" + fmtD(g.ns) + "</td><td>" + diff(g.n, g.ns) + "</td></tr>"; }).join("");
+    const sRows = state.schedules.map((s, q) => "<tr><td>" + (q + 1) + ". " + h((s.name || "").trim() || "नाम नहीं") + "</td><td>" + fmtD(per[q].k) + "</td><td>" + fmtD(per[q].n) + "</td></tr>").join("");
+    return '<div class="card"><div class="card-h"><div><h2>कुल जोड़ की जाँच</h2><div class="hint">रकवा = एकड़-डिसमिल</div></div></div><div class="card-b tbl-wrap">' +
+      '<table class="tbl"><thead><tr><th>रैयत</th><th>खतियानी कुल</th><th>बँटा</th><th>मिलान</th><th>नक्शा कुल</th><th>बँटा</th><th>मिलान</th></tr></thead><tbody>' + gRows +
+      '<tr class="tot"><td>कुल</td><td>' + fmtD(kAll) + "</td><td>" + fmtD(kS) + "</td><td>" + diff(kAll, kS) + "</td><td>" + fmtD(nAll) + "</td><td>" + fmtD(nS) + "</td><td>" + diff(nAll, nS) + "</td></tr></tbody></table>" +
+      '<table class="tbl" style="margin-top:14px"><thead><tr><th>अनुसूचि (हिस्सेदार)</th><th>कुल खतियानी रकवा</th><th>कुल नक्शा रकवा</th></tr></thead><tbody>' + sRows + "</tbody></table></div></div>";
+  }
+
   /* ---------- Step 4 : review ---------- */
   function panelReview() {
     const flat = [];
@@ -301,8 +381,9 @@
       '<div class="card"><div class="card-h"><h2>पंक्तियों का सार</h2></div><div class="card-b tbl-wrap">' +
       (flat.length ? '<table class="tbl"><thead><tr><th>क्र.</th><th>रैयत</th><th>जमाबंदी</th><th>खाता</th><th>खेसरा</th><th>खतियानी रकवा</th><th>नक्शा रकवा</th><th>बँटवारा</th></tr></thead><tbody>' + trs + "</tbody></table>" : "<p>कोई पंक्ति नहीं।</p>") +
       "</div></div>" +
+      optionsCard() + totalsCard(flat) +
       '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + flat.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · " + pages + " पेज (एक पेज पर अधिकतम 5 अनुसूचि, पेज का साइज़ अपने-आप)</p></div>" +
-      '<button type="button" class="btn primary lg" data-act="download">⬇ DOCX डाउनलोड करें</button></div></div>';
+      '<div class="dl-btns"><button type="button" class="btn primary lg" data-act="download">⬇ DOCX डाउनलोड करें</button><button type="button" class="btn soft lg" data-act="pdf">🖨 PDF / प्रिंट</button></div></div></div>';
   }
 
   /* ---------- render ---------- */
@@ -345,8 +426,12 @@
     save(); updateLive();
   });
   document.addEventListener("change", (e) => {
+    const tg = e.target;
+    if (tg && tg.dataset && tg.dataset.pick) { const [g, p, k] = tg.dataset.pick.split("-").map(Number); pickOf(g, p)[k] = tg.checked; return; }
+    if (tg && tg.dataset && tg.dataset.chk) { setP(tg.dataset.chk, tg.checked); save(); if (ui.step === 3) render(); return; }
     const p = e.target && e.target.dataset && e.target.dataset.p;
-    if (p && /\./.test(p) && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); }
+    if (p && /\./.test(p) && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); if (ui.step === 3 && /^opts\./.test(p)) render(); }
+    if (p && /^opts\./.test(p) && e.target.tagName === "TEXTAREA" && ui.step === 3) render();
   });
 
   document.addEventListener("click", (e) => {
@@ -357,6 +442,8 @@
     if (act === "step") go(i);
     else if (act === "toggleGroup") { ui.openGroup = ui.openGroup === gi ? -1 : gi; render(); }
     else if (act === "togglePlot") { ui.openPlot[gi] = ui.openPlot[gi] === pi ? -1 : pi; render(); }
+    else if (act === "splitEq") splitEqual(gi, pi);
+    else if (act === "restFill") fillRest(gi, pi, s);
     else if (act === "addGroup") { state.groups.push(blankGroup(n)); ui.openGroup = state.groups.length - 1; ui.openPlot[ui.openGroup] = 0; save(); render(); }
     else if (act === "addPlot") {
       const g = state.groups[gi], prev = g.plots[g.plots.length - 1];
@@ -380,6 +467,7 @@
       snapshot("अनुसूचि हटाने से पहले"); state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
     else if (act === "pvToggle") { t.closest(".pv-page").classList.toggle("full"); fitPreview(); }
+    else if (act === "pdf") printPdf();
     else if (act === "download") download();
   });
 
@@ -389,7 +477,7 @@
   $("#btnDemo").addEventListener("click", () => {
     const hasData = state.groups.some((g) => (g.name || "").trim() || g.plots.some(plotHasData)) || state.schedules.some((s) => (s.name || "").trim());
     if (hasData && !confirm("अभी भरा हुआ डाटा हटकर डेमो डाटा आ जाएगा। ठीक है?")) return;
-    snapshot("डेमो भरने से पहले");
+    snapshot("डेमो भरने से पहले"); detachCase();
     state = demoState();
     ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -397,9 +485,9 @@
   });
   $("#btnNew").addEventListener("click", () => {
     if (!confirm("सभी अनुसूचियाँ और पंक्तियाँ साफ़ हो जाएँगी (गाँव / थाना विवरण बचा रहेगा)। नया फॉर्म शुरू करें?")) return;
-    snapshot("नया फॉर्म शुरू करने से पहले");
-    const hd = state.header;
-    state = normalize(freshState()); state.header = hd;
+    snapshot("नया फॉर्म शुरू करने से पहले"); detachCase();
+    const hd = state.header, op = state.opts;
+    state = normalize(freshState()); state.header = hd; state.opts = op;
     ui.step = 1; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     render(); toast("नया फॉर्म तैयार है।");
@@ -461,7 +549,7 @@
     const list = histLoad(), it = list.find((x) => x.id === b.dataset.id); if (!it) return;
     if (b.dataset.hact === "del") { histSave(list.filter((x) => x.id !== it.id)); histCount(); histRender(); return; }
     if (stateHasData(state) && !confirm("अभी का डाटा हट जाएगा (वो भी 'पिछला डाटा' में सेव रहेगा)। यह पिछला डाटा खोलें?")) return;
-    snapshot("पिछला डाटा खोलने से पहले");
+    snapshot("पिछला डाटा खोलने से पहले"); detachCase();
     try { state = normalize(JSON.parse(it.json)); } catch (err) { toast("यह डाटा खुल नहीं पाया", true); return; }
     ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (err) {}
@@ -477,7 +565,7 @@
     catch (e) { toast("यह फाइल पढ़ी नहीं जा सकी — सही DOCX चुनें।", true); return; }
     if (!st) { toast("इस DOCX में फॉर्म का डाटा नहीं मिला। सिर्फ़ इसी साइट के नए वर्ज़न से बनी DOCX खुल सकती है।", true); return; }
     if (stateHasData(state) && !confirm("अभी का डाटा हट जाएगा (वो 'पिछला डाटा' में सेव रहेगा)। इस DOCX का डाटा खोलें?")) return;
-    snapshot("DOCX से खोलने से पहले");
+    snapshot("DOCX से खोलने से पहले"); detachCase();
     state = normalize(st);
     ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {};
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -545,6 +633,215 @@
     } catch (err) { toast(err.message || "DOCX नहीं बन पाया", true); }
   }
 
+  /* ---------- मेन्यू ---------- */
+  const menu = $("#menu");
+  $("#btnMenu").addEventListener("click", (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener("click", (e) => { if (!menu.hidden && !e.target.closest(".menu-wrap")) menu.hidden = true; });
+  menu.addEventListener("click", () => { menu.hidden = true; });
+
+  /* ---------- PDF / प्रिंट ---------- */
+  function printPdf() {
+    try {
+      if (!state.groups.some((g) => g.plots.some(plotHasData))) { toast("पहले कम से कम एक पंक्ति भरें।", true); return; }
+      const m = BatwaraDocx.printHtml(state);
+      let st = $("#printStyle");
+      if (!st) { st = document.createElement("style"); st.id = "printStyle"; document.head.appendChild(st); }
+      st.textContent = m.css; $("#printRoot").innerHTML = m.html;
+      toast("प्रिंट विंडो में 'PDF के रूप में सेव करें' चुनें।");
+      setTimeout(() => window.print(), 250);
+    } catch (err) { toast(err.message || "PDF नहीं बन पाया", true); }
+  }
+  $("#btnPdf").addEventListener("click", printPdf);
+
+  /* ---------- English → हिंदी टाइपिंग ---------- */
+  let trOn = true;
+  try { trOn = localStorage.getItem("batwaraTranslit") !== "0"; } catch (e) {}
+  const trLabel = () => { $("#trState").textContent = trOn ? "चालू" : "बंद"; };
+  $("#btnTranslit").addEventListener("click", () => {
+    trOn = !trOn; try { localStorage.setItem("batwaraTranslit", trOn ? "1" : "0"); } catch (e) {}
+    trLabel(); toast("English → हिंदी टाइपिंग " + (trOn ? "चालू" : "बंद"));
+  });
+  const NOTR = /(jamabandi|khata|khesra|k_ac|k_dc|n_ac|n_dc|_ref|thana_no)$/;
+  const textField = (el) => el && el.dataset && el.dataset.p && ((el.tagName === "INPUT" && el.type === "text") || el.tagName === "TEXTAREA") && !NOTR.test(el.dataset.p) && !/^opts\./.test(el.dataset.p);
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (!trOn || !textField(el) || !BatwaraHindi.hasLatin(el.value)) return;
+    const v = BatwaraHindi.convert(el.value);
+    el.value = v; setP(el.dataset.p, v); save(); updateLive();
+  });
+
+  /* ---------- आवाज़ से टाइपिंग (हिंदी) ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $("#micBtn");
+  let lastEl = null, rec = null, listening = false;
+  document.addEventListener("focusin", (e) => { if (textField(e.target)) { lastEl = e.target; mic.hidden = false; } });
+  document.addEventListener("focusout", () => setTimeout(() => {
+    const a = document.activeElement;
+    if (!listening && a !== mic && !textField(a)) mic.hidden = true;
+  }, 300));
+  mic.addEventListener("mousedown", (e) => e.preventDefault());
+  mic.addEventListener("click", () => {
+    if (!SR) { toast("इस ब्राउज़र में आवाज़ से टाइपिंग नहीं है (Chrome / Edge / Safari में चलती है)।", true); return; }
+    if (listening) { rec && rec.stop(); return; }
+    if (!lastEl) { toast("पहले किसी खाने में क्लिक करें।", true); return; }
+    const target = lastEl;
+    rec = new SR(); rec.lang = "hi-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onstart = () => { listening = true; mic.classList.add("on"); toast("बोलिए…"); };
+    rec.onend = () => { listening = false; mic.classList.remove("on"); };
+    rec.onerror = (ev) => { toast("आवाज़ नहीं सुन पाया" + (ev.error ? " (" + ev.error + ")" : ""), true); };
+    rec.onresult = (ev) => {
+      const txt = ev.results[0][0].transcript.trim(), cur = target.value.trim();
+      target.value = cur ? cur + " " + txt : txt;
+      target.dispatchEvent(new Event("input", { bubbles: true })); target.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    try { rec.start(); } catch (e) { toast("माइक शुरू नहीं हो पाया", true); }
+  });
+
+  /* ---------- नाम वाले केस (मेरे केस) ---------- */
+  const CKEY = "batwaraCases_v1", CUR = "batwaraCurrentCase";
+  const casesLoad = () => { try { const a = JSON.parse(localStorage.getItem(CKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  const casesSave = (l) => { try { localStorage.setItem(CKEY, JSON.stringify(l)); return true; } catch (e) { toast("जगह कम है — केस सेव नहीं हो पाया", true); return false; } };
+  let curCase = null;
+  try { curCase = localStorage.getItem(CUR) || null; } catch (e) {}
+  function setCur(id) { curCase = id; try { id ? localStorage.setItem(CUR, id) : localStorage.removeItem(CUR); } catch (e) {} chip(); }
+  function chip() { const c = curCase && casesLoad().find((x) => x.id === curCase); $("#caseChip").textContent = c ? "· " + c.name : ""; }
+  function caseTouch() {
+    if (!curCase) return;
+    const l = casesLoad(), c = l.find((x) => x.id === curCase);
+    if (!c) { setCur(null); return; }
+    const json = JSON.stringify(state);
+    if (c.json === json) return;
+    c.json = json; c.ts = Date.now(); casesSave(l); cloudSchedule(c);
+  }
+  function detachCase() { caseTouch(); setCur(null); }
+  function defaultCaseName() {
+    const g = state.groups.find((x) => (x.name || "").trim());
+    const nm = [(state.header.mauja || "").trim(), g ? g.name.trim() : ""].filter(Boolean).join(" – ");
+    return nm || "केस " + new Date().toLocaleDateString("hi-IN");
+  }
+  const timeStr = (ts) => { const d = new Date(ts); return d.toLocaleDateString("hi-IN", { day: "numeric", month: "short", year: "numeric" }) + " · " + d.toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }); };
+  function caseRender() {
+    const q = $("#caseSearch").value.trim().toLowerCase(), box = $("#caseList");
+    const all = casesLoad().sort((a, b) => b.ts - a.ts);
+    const list = all.filter((c) => { if (!q) return true; const m = histMeta(c.json); return (c.name + " " + m.title + " " + m.place).toLowerCase().indexOf(q) >= 0; });
+    if (!list.length) { box.innerHTML = '<div class="hist-empty">' + (all.length ? "कोई केस नहीं मिला।" : 'अभी कोई केस सेव नहीं है।<br><small>ऊपर "वर्तमान डाटा नए केस में सेव करें" दबाकर नाम दें — फिर आप जो भी बदलेंगे वह उसी केस में अपने-आप सेव होता रहेगा।</small>') + "</div>"; return; }
+    box.innerHTML = list.map((c, i) => {
+      const m = histMeta(c.json), on = c.id === curCase;
+      return '<div class="hist-item' + (on ? " cur" : "") + '"><div class="hist-n">' + (i + 1) + '</div><div class="hist-info"><b>' + h(c.name) + (on ? ' <em class="curtag">अभी खुला</em>' : "") + "</b>" +
+        "<span>" + h(m.place ? m.place + " · " : "") + h(m.line) + "</span><small>" + h(timeStr(c.ts)) + "</small></div>" +
+        '<div class="hist-act"><button type="button" class="btn primary sm" data-cact="open" data-id="' + h(c.id) + '">खोलें</button>' +
+        '<button type="button" class="btn ghost sm" data-cact="rename" data-id="' + h(c.id) + '">नाम</button>' +
+        '<button type="button" class="btn ghost sm" data-cact="copy" data-id="' + h(c.id) + '">कॉपी</button>' +
+        '<button type="button" class="btn danger sm" data-cact="del" data-id="' + h(c.id) + '">हटाएँ</button></div></div>';
+    }).join("");
+  }
+  function caseOpenModal() { $("#caseSearch").value = ""; $("#cloudBar").innerHTML = '<button type="button" class="btn ghost sm" id="caseCloud">☁ क्लाउड सिंक</button>'; caseRender(); $("#caseModal").hidden = false; }
+  const caseClose = () => { $("#caseModal").hidden = true; };
+  $("#btnCases").addEventListener("click", caseOpenModal);
+  $("#caseClose").addEventListener("click", caseClose);
+  $("#caseModal").addEventListener("click", (e) => { if (e.target.id === "caseModal") caseClose(); if (e.target.id === "caseCloud") { caseClose(); cloudOpen(); } });
+  $("#caseSearch").addEventListener("input", caseRender);
+  $("#caseNew").addEventListener("click", () => {
+    const name = (prompt("इस केस का नाम लिखें:", defaultCaseName()) || "").trim();
+    if (!name) return;
+    caseTouch();
+    const c = { id: "c" + Date.now() + Math.random().toString(36).slice(2, 6), name, ts: Date.now(), json: JSON.stringify(state) };
+    const l = casesLoad(); l.unshift(c);
+    if (casesSave(l)) { setCur(c.id); caseRender(); cloudSchedule(c); toast("केस सेव हो गया — अब बदलाव इसी में सेव होते रहेंगे।"); }
+  });
+  $("#caseList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cact]"); if (!b) return;
+    const l = casesLoad(), c = l.find((x) => x.id === b.dataset.id); if (!c) return;
+    const act = b.dataset.cact;
+    if (act === "rename") { const n = (prompt("नया नाम:", c.name) || "").trim(); if (!n) return; c.name = n; c.ts = Date.now(); casesSave(l); chip(); caseRender(); cloudSchedule(c); }
+    else if (act === "copy") { const d = { id: "c" + Date.now() + Math.random().toString(36).slice(2, 6), name: c.name + " (कॉपी)", ts: Date.now(), json: c.json }; l.unshift(d); casesSave(l); caseRender(); cloudSchedule(d); }
+    else if (act === "del") {
+      if (!confirm("केस '" + c.name + "' हमेशा के लिए हट जाएगा। ठीक है?")) return;
+      casesSave(l.filter((x) => x.id !== c.id)); if (curCase === c.id) setCur(null); caseRender(); cloudRemove(c.id);
+    }
+    else if (act === "open") {
+      if (c.id !== curCase) {
+        caseTouch();
+        if (!curCase && stateHasData(state)) { if (!confirm("अभी का डाटा किसी केस में सेव नहीं है; वह 'पिछला डाटा' में रख दिया जाएगा। केस खोलें?")) return; snapshot("केस खोलने से पहले"); }
+      }
+      try { state = normalize(JSON.parse(c.json)); } catch (err) { toast("यह केस खुल नहीं पाया", true); return; }
+      setCur(c.id); ui.step = 3; ui.openGroup = 0; ui.openPlot = {}; ui.schTab = {}; ui.pick = {};
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (err) {}
+      caseClose(); render(); window.scrollTo({ top: 0 }); toast("केस खुल गया: " + c.name);
+    }
+  });
+  $("#caseExport").addEventListener("click", () => {
+    caseTouch();
+    const l = casesLoad();
+    if (!l.length) { toast("अभी कोई केस सेव नहीं है।", true); return; }
+    const blob = new Blob([JSON.stringify({ app: "batwara", v: 1, cases: l })], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "batwara_backup_" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast(l.length + " केस की बैकअप फाइल बन गई।");
+  });
+  $("#caseImport").addEventListener("click", () => $("#fileBackup").click());
+  $("#fileBackup").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try {
+      const o = JSON.parse(await f.text());
+      if (!o || o.app !== "batwara" || !Array.isArray(o.cases)) throw new Error("x");
+      const l = casesLoad(), map = {}; l.forEach((c) => { map[c.id] = c; });
+      let n = 0;
+      o.cases.forEach((c) => { if (c && c.id && c.name && c.json && (!map[c.id] || map[c.id].ts < c.ts)) { map[c.id] = { id: c.id, name: c.name, ts: c.ts || Date.now(), json: c.json }; n++; } });
+      if (casesSave(Object.values(map))) { caseRender(); chip(); toast(n + " केस बैकअप से जुड़ गए।"); }
+    } catch (err) { toast("यह बैकअप फाइल सही नहीं है।", true); }
+  });
+
+  /* ---------- क्लाउड बैकअप (वैकल्पिक, Firebase) ---------- */
+  let cloudTimer = null;
+  function cloudSchedule(c) {
+    if (!window.BatwaraCloud || !BatwaraCloud.configured() || !BatwaraCloud.user()) return;
+    clearTimeout(cloudTimer); cloudTimer = setTimeout(() => { BatwaraCloud.push([c]).catch(() => {}); }, 4000);
+  }
+  function cloudRemove(id) { if (window.BatwaraCloud && BatwaraCloud.configured() && BatwaraCloud.user()) BatwaraCloud.remove(id).catch(() => {}); }
+  function cloudOpen() { $("#cloudModal").hidden = false; cloudRender(); }
+  const cloudClose = () => { $("#cloudModal").hidden = true; };
+  function cloudRender(msg) {
+    const body = $("#cloudBody");
+    if (!BatwaraCloud.configured()) {
+      body.innerHTML = '<div class="cloud-help"><b>क्लाउड बैकअप अभी चालू नहीं है।</b><p>इसे चालू करने के लिए (एक बार का सेटअप, मुफ़्त):</p><ol>' +
+        '<li><b>console.firebase.google.com</b> पर नया प्रोजेक्ट बनाएँ।</li><li>Authentication → Sign-in method → <b>Google</b> चालू करें; Authentication → Settings → Authorized domains में अपनी साइट का डोमेन (जैसे <i>snaptestpro.github.io</i>) जोड़ें।</li>' +
+        '<li>Firestore Database बनाएँ, फिर Rules में ये लगाएँ:<pre>rules_version = \'2\';\nservice cloud.firestore {\n  match /databases/{db}/documents {\n    match /batwara_users/{uid}/{doc=**} {\n      allow read, write: if request.auth != null\n                         && request.auth.uid == uid;\n    }\n  }\n}</pre></li>' +
+        '<li>Project settings → Your apps → Web app का <b>firebaseConfig</b> कॉपी करके साइट की <b>firebase-config.js</b> फाइल में डालें और GitHub पर अपलोड करें।</li></ol><p>तब तक "मेरे केस" में <b>बैकअप फाइल</b> से भी डाटा दूसरे फोन/कंप्यूटर पर ले जा सकते हैं।</p></div>';
+      return;
+    }
+    const u = BatwaraCloud.user();
+    body.innerHTML = (msg ? '<div class="note">' + h(msg) + "</div>" : "") + (u
+      ? '<div class="cloud-user">✓ साइन इन: <b>' + h(u.email || u.displayName || "") + '</b></div><div class="cloud-act"><button type="button" class="btn primary" id="cloudSync">🔄 अभी सिंक करें</button><button type="button" class="btn ghost" id="cloudOut">साइन आउट</button></div><p class="hint">सिंक में दोनों तरफ़ के केस मिल जाते हैं — जो नया है वही रखा जाता है। साइन इन रहने पर बदलाव अपने-आप क्लाउड में जाते हैं।</p>'
+      : '<div class="cloud-act"><button type="button" class="btn primary" id="cloudIn">Google से साइन इन करें</button></div>');
+  }
+  async function cloudSync() {
+    try {
+      cloudRender("सिंक हो रहा है…");
+      const remote = await BatwaraCloud.pull(), local = casesLoad(), map = {};
+      local.forEach((c) => { map[c.id] = c; });
+      let down = 0, curNewer = false;
+      remote.forEach((r) => { const l = map[r.id]; if (!l || l.ts < r.ts) { map[r.id] = { id: r.id, name: r.name, ts: r.ts, json: r.json }; down++; if (r.id === curCase) curNewer = true; } });
+      const up = local.filter((l) => { const r = remote.find((x) => x.id === l.id); return !r || r.ts < l.ts; });
+      casesSave(Object.values(map));
+      if (up.length) await BatwaraCloud.push(up);
+      if (curNewer && map[curCase]) { state = normalize(JSON.parse(map[curCase].json)); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} render(); }
+      chip(); cloudRender("सिंक पूरा: " + down + " केस नीचे आए, " + up.length + " ऊपर गए।");
+    } catch (err) { cloudRender("सिंक नहीं हो पाया: " + (err.message || err)); }
+  }
+  $("#btnCloud").addEventListener("click", cloudOpen);
+  $("#cloudClose").addEventListener("click", cloudClose);
+  $("#cloudModal").addEventListener("click", async (e) => {
+    if (e.target.id === "cloudModal") cloudClose();
+    if (e.target.id === "cloudIn") { try { await BatwaraCloud.init(); await BatwaraCloud.signIn(); cloudSync(); } catch (err) { cloudRender("साइन इन नहीं हो पाया: " + (err.message || err)); } }
+    if (e.target.id === "cloudOut") { await BatwaraCloud.signOut(); cloudRender(); }
+    if (e.target.id === "cloudSync") cloudSync();
+  });
+  if (window.BatwaraCloud && BatwaraCloud.configured()) BatwaraCloud.init().catch(() => {});
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { caseClose(); cloudClose(); } });
+
+  trLabel(); chip();
   histCount();
   render();
 })();
