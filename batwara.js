@@ -9,13 +9,20 @@
 (function (root) {
 
   const MAX_SCHED_PER_PAGE = 5;
+  const DEFAULT_DECL = "हम सभी फरीकैन आपस में सहमति से बखुदहा जमीन बँटवारा कर जोत आबाद कर रहे हैं। दिए शेड्यूल पर अंकित खाता एवं खेसरा एवं रकवा पर भविष्य में एक दूसरे की हिस्से की भूमि पर फरीकैन या उनके वंशज दावा नहीं करेंगे। अगर किसी के द्वारा किसी प्रकार का दावा प्रस्तुत किया जाता है तो वह मान्य नहीं होगा। इस पर हम {संख्या} फरीकैन को मंजूर है और अपना हस्ताक्षर किया हूँ।";
   const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
   const PAPER = { A4: [16838, 11906, 2], A3: [23811, 16838, 3], Legal: [20160, 12240, 2] };   // landscape: चौड़ाई, ऊँचाई, एक पेज पर अनुसूचि
   function getOpts(st) {
     const o = (st && st.opts) || {};
     return { pageNo: o.pageNo !== false, sign: !!o.sign, signLabels: o.signLabels != null ? String(o.signLabels) : DEFAULT_SIGN,
-      totalRow: !!o.totalRow, paper: PAPER[o.paper] ? o.paper : "auto" };
+      totalRow: !!o.totalRow, paper: PAPER[o.paper] ? o.paper : "auto",
+      decl: o.decl !== false, declText: o.declText != null ? String(o.declText) : DEFAULT_DECL, declFoot: o.declFoot != null ? String(o.declFoot) : "गवाह का हस्त०",
+      partyWord: o.partyWord != null && String(o.partyWord).trim() !== "" ? String(o.partyWord).trim() : "auto" };
   }
+  // "हम ___ फरीकैन" में क्या लिखें: auto = अनुसूचि की गिनती से; "-" = कुछ नहीं; वरना जो लिखा हो वही
+  const PARTY_AUTO = { 1: "", 2: "दोनों", 3: "तीनों", 4: "चारों", 5: "पाँचों" };
+  function partyWordFor(opts, n) { const w = String(opts.partyWord || "auto").trim() || "auto"; return w === "-" ? "" : w === "auto" ? (PARTY_AUTO[n] != null ? PARTY_AUTO[n] : "सभी") : w; }
+  const fillParty = (txt, word) => String(txt).replace(/\{संख्या\}/g, word).replace(/ {2,}/g, " ");
   const toDec = (ac, dc) => { ac = t(ac); dc = t(dc); if (!ac && !dc) return null; return (parseFloat(ac) || 0) * 100 + (parseFloat(dc) || 0); };
   const fmtDec = (v) => { v = Math.round(v * 100) / 100; const a = Math.floor(v / 100 + 1e-9); return rk(String(a), String(Math.round((v - a * 100) * 100) / 100)); };
   const MARGIN = 360;                 // बाएँ/दाएँ margin (twips)
@@ -217,7 +224,7 @@
       bodyRows.forEach((r, ri) => { r.forEach((cell, ci) => { if (cols[ci].id === "name" && !(opts.totalRow && ri === bodyRows.length - 1)) cell.boldFirst = true; }); });
       return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows };
     });
-    return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length, opts, signLabels: opts.sign ? opts.signLabels.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(0, 6) : [] };
+    return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length, opts, decl: opts.decl && (opts.declText.trim() || opts.declFoot.trim()) ? { lines: fillParty(opts.declText, partyWordFor(opts, scheds.length)).split(/\r?\n/).map((x) => x.trim()).filter(Boolean), foot: opts.declFoot.trim() } : null, signLabels: opts.sign ? opts.signLabels.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(0, 6) : [] };
   }
 
   /* ---------- पेज के ऊपर का शीर्षक-खंड (असली फॉर्म की तरह: दो box, भरी वैल्यू के नीचे रेखा) ---------- */
@@ -269,6 +276,14 @@
       paraRuns([{ t: labels[i], b: true }], 18, "center", '<w:pBdr><w:top w:val="single" w:sz="8" w:space="4" w:color="000000"/></w:pBdr>', 0, 0) + "</w:tc>").join("");
     return place + '<w:tbl><w:tblPr><w:tblW w:w="' + (w * n) + '" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>' +
       labels.map(() => '<w:gridCol w:w="' + w + '"/>').join("") + '</w:tblGrid><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="1300" w:hRule="atLeast"/></w:trPr>' + cells + "</w:tr></w:tbl>" + para("", 10, "left");
+  }
+  function declSize(pageW) { const k = Math.max(0.8, Math.min(1.45, pageW / 23814)); return Math.round(22 * k / 2) * 2; }
+  function docxDecl(d, pageW) {
+    if (!d) return "";
+    const sz = declSize(pageW);
+    const ps = d.lines.map((l, i) => paraRuns([{ t: l }], sz, "both", "<w:keepLines/>" + (i === d.lines.length - 1 && d.foot ? "<w:keepNext/>" : ""), i === 0 ? 300 : 120, 0)).join("");
+    const foot = d.foot ? paraRuns([{ t: d.foot + "  ", b: true }, { t: "………………………………………" }], sz, "right", "", 420, 0) : "";
+    return ps + foot;
   }
   function footerXml() {
     const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n';
@@ -359,7 +374,7 @@
     const body = L.chunks.map((ch, i) => {
       const last = i === L.chunks.length - 1;
       return docxHeader(headerBlock(L.header, ch.pageW), ch.total) + docxTable(ch) +
-        (last ? para("", 10, "left") + docxSign(L.signLabels, ch.total) : "<w:p><w:pPr>" + sectPr(ch, ftr) + "</w:pPr></w:p>");
+        (last ? para("", 10, "left") + docxDecl(L.decl, ch.pageW) + docxSign(L.signLabels, ch.total) : "<w:p><w:pPr>" + sectPr(ch, ftr) + "</w:pPr></w:p>");
     }).join("");
     doc = doc.slice(0, bStart) + body + sectPr(L.chunks[L.chunks.length - 1], ftr) + "</w:body></w:document>";
     if (ftr) {
@@ -393,8 +408,10 @@
         return cellHtml("td", cell, rs);
       }).join("") + "</tr>").join("");
       const pw = Math.round(ch.total / 15);
-      const signHtml = (ci === L.chunks.length - 1 && L.signLabels.length)
-        ? '<div class="pv-place">स्थान : ……………………………&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;दिनांक : ……………………………</div><div class="pv-sign" style="width:' + pw + 'px">' + L.signLabels.map((l) => "<div><span>" + esc(l) + "</span></div>").join("") + "</div>" : "";
+      const declHtml = (ci === L.chunks.length - 1 && L.decl)
+        ? '<div class="pv-decl" style="font-size:' + (declSize(ch.pageW) / 2) + 'pt">' + L.decl.lines.map((l) => "<p>" + esc(l) + "</p>").join("") + (L.decl.foot ? '<div class="pv-declfoot"><b>' + esc(L.decl.foot) + "</b>&nbsp;&nbsp;………………………………………</div>" : "") + "</div>" : "";
+      const signHtml = declHtml + ((ci === L.chunks.length - 1 && L.signLabels.length)
+        ? '<div class="pv-place">स्थान : ……………………………&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;दिनांक : ……………………………</div><div class="pv-sign" style="width:' + pw + 'px">' + L.signLabels.map((l) => "<div><span>" + esc(l) + "</span></div>").join("") + "</div>" : "");
       const footHtml = L.opts.pageNo ? '<div class="pv-foot">पृष्ठ ' + (ci + 1) + " / " + L.chunks.length + "</div>" : "";
       if (print) return '<section class="pv-print pg' + ci + '"><div class="pv-sheet" style="width:' + pw + 'px">' +
         '<div class="pv-head"><div class="pv-box">' + hb.paras.map((p) => '<div style="text-align:' + p.jc + ";font-size:" + (p.sz / 2) + 'pt">' + runsHtml(p.runs) + "</div>").join("") + "</div>" +
@@ -418,7 +435,7 @@
     return { html: previewHtml(st, { print: true }), css };
   }
 
-  root.BatwaraDocx = { build, layout, previewHtml, printHtml, extractState };
+  root.BatwaraDocx = { build, layout, previewHtml, printHtml, extractState, partyWordFor, fillParty };
   if (typeof module !== "undefined" && module.exports) module.exports = root.BatwaraDocx;
 
 })(typeof window !== "undefined" ? window : globalThis);

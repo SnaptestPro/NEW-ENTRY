@@ -393,3 +393,13 @@ table.tbl tr.tot td{background:#f1f5f9;font-weight:700}
 .cloud-user{padding:10px 12px;background:#f0fdf8;border:1px solid #a7f3d0;border-radius:9px;margin-bottom:12px}
 .cloud-act{display:flex;gap:10px;flex-wrap:wrap}
 @media print{html,body{background:#fff !important}#printRoot{background:#fff}}
+
+.pv-decl{margin-top:16px;font-family:"Mangal","Nirmala UI","Noto Sans Devanagari",sans-serif;color:#000;line-height:1.6}
+.pv-decl p{margin:0 0 6px;text-align:justify}
+.pv-declfoot{text-align:right;margin-top:22px}
+
+.party-box{margin-top:12px;padding:12px;border:1.5px dashed #93a8ff;border-radius:11px;background:#f6f8ff}
+.party-t{font-weight:600;margin-bottom:8px;color:#1f2a37}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;font:inherit;font-size:13.5px;cursor:pointer;color:#334155}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}

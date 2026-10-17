@@ -36,10 +36,14 @@
   const blankSched = () => ({ name: "", rel_type: "पिता", rel_naam: "", jati: "", nivasi: "निज ग्राम" });
   const freshState = () => ({ header: {}, schedules: [blankSched()], groups: [blankGroup(1)] });
 
+  const OLD_DECL = "हम सभी फरीकैन आपस में सहमति से बखुदहा जमीन बँटवारा कर जोत आबाद कर रहे हैं। दिए शेड्यूल पर अंकित खाता एवं खेसरा एवं रकवा पर भविष्य में एक दूसरे की हिस्से की भूमि पर फरीकैन या उनके वंशज दावा नहीं करेंगे। अगर किसी के द्वारा किसी प्रकार का दावा प्रस्तुत किया जाता है तो वह मान्य नहीं होगा। इस पर हम दोनों फरीकैन को मंजूर है और अपना हस्ताक्षर किया हूँ।";
+  const DEFAULT_DECL = "हम सभी फरीकैन आपस में सहमति से बखुदहा जमीन बँटवारा कर जोत आबाद कर रहे हैं। दिए शेड्यूल पर अंकित खाता एवं खेसरा एवं रकवा पर भविष्य में एक दूसरे की हिस्से की भूमि पर फरीकैन या उनके वंशज दावा नहीं करेंगे। अगर किसी के द्वारा किसी प्रकार का दावा प्रस्तुत किया जाता है तो वह मान्य नहीं होगा। इस पर हम {संख्या} फरीकैन को मंजूर है और अपना हस्ताक्षर किया हूँ।";
   const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
   function normalize(st) {
     st.header = st.header || {};
-    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN }, st.opts || {});
+    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN, decl: true, declText: DEFAULT_DECL, declFoot: "गवाह का हस्त०", partyWord: "auto" }, st.opts || {});
+    if (st.opts.declText === OLD_DECL) st.opts.declText = DEFAULT_DECL;   // पुराना डिफ़ॉल्ट पाठ → नया (जिसमें संख्या बदली जा सकती है)
+    if (st.opts.partyWord == null || String(st.opts.partyWord).trim() === "") st.opts.partyWord = "auto";
     if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [blankSched()];
     st.schedules.forEach((x) => { if (x.rel_type == null) x.rel_type = "पिता"; ["rel_naam", "jati", "nivasi"].forEach((k) => { if (x[k] == null) x[k] = ""; }); });
     if (!Array.isArray(st.groups) || !st.groups.length) st.groups = [blankGroup(st.schedules.length)];
@@ -316,6 +320,17 @@
   }
 
   /* ---------- Step 4 : सेटिंग + कुल जोड़ ---------- */
+  function partyBox(o) {
+    const n = state.schedules.length;
+    const cur = o.partyWord || "auto";
+    const chips = [["auto", "अपने-आप (" + (BatwaraDocx.partyWordFor({ partyWord: "auto" }, n) || "खाली") + ")"], ["-", "कुछ नहीं"], ["दोनों", "दोनों"], ["तीनों", "तीनों"], ["चारों", "चारों"], ["पाँचों", "पाँचों"], ["सभी", "सभी"]];
+    const isPreset = chips.some((c) => c[0] === cur);
+    const word = BatwaraDocx.partyWordFor(o, n);
+    return '<div class="party-box"><div class="party-t">"इस पर हम <b>' + h(word || "…") + '</b> फरीकैन को मंजूर है" — यहाँ क्या लिखें?</div>' +
+      '<div class="chips">' + chips.map((c) => '<button type="button" class="chip' + (cur === c[0] ? " on" : "") + '" data-act="partyWord" data-v="' + h(c[0]) + '">' + h(c[1]) + "</button>").join("") + "</div>" +
+      '<div class="fld" style="margin-top:8px"><span>या अपना शब्द लिखें (जैसे: चारों, सभी पाँचों)</span><input type="text" data-p="opts.partyWord" value="' + (isPreset ? "" : h(cur)) + '" placeholder="अपना शब्द"></div>' +
+      '<div class="hint">पाठ में <b>{संख्या}</b> की जगह यही शब्द छपता है। "अपने-आप" में अनुसूचि की गिनती (अभी ' + n + ') से तय होता है।</div></div>';
+  }
   function optionsCard() {
     const o = state.opts;
     const fixed = { A4: 2, A3: 3, Legal: 2 }[o.paper];
@@ -323,10 +338,13 @@
       '<div class="opt-grid">' +
       '<label class="chk"><input type="checkbox" data-chk="opts.pageNo"' + (o.pageNo ? " checked" : "") + '> पृष्ठ संख्या (नीचे "पृष्ठ 1 / 2")</label>' +
       '<label class="chk"><input type="checkbox" data-chk="opts.totalRow"' + (o.totalRow ? " checked" : "") + '> अंत में <b>कुल जोड़</b> की पंक्ति</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.decl"' + (o.decl ? " checked" : "") + '> <b>घोषणा पाठ</b> ("हम सभी फरीकैन…") + गवाह की लाइन</label>' +
       '<label class="chk"><input type="checkbox" data-chk="opts.sign"' + (o.sign ? " checked" : "") + '> <b>हस्ताक्षर</b> के खाने (अंतिम पेज पर)</label>' +
       '<div class="fld"><span>कागज़ का साइज़ (लैंडस्केप)</span><select data-p="opts.paper">' +
       [["auto", "अपने-आप (कॉलम के हिसाब से)"], ["A4", "A4"], ["A3", "A3"], ["Legal", "Legal"]].map((x) => '<option value="' + x[0] + '"' + (o.paper === x[0] ? " selected" : "") + ">" + x[1] + "</option>").join("") + "</select></div></div>" +
       (fixed ? '<div class="note">इस साइज़ पर एक पेज में अधिकतम <b>' + fixed + '</b> अनुसूचि आएँगी; ज़्यादा हों तो अगला पेज बनेगा।</div>' : "") +
+      (o.decl ? partyBox(o) : "") +
+      (o.decl ? '<div class="fld" style="margin-top:12px"><span>घोषणा पाठ — table के नीचे छपेगा (हर लाइन एक अनुच्छेद; चाहें तो बदल लें)</span><textarea data-p="opts.declText" rows="6">' + h(o.declText) + '</textarea></div><div class="fld" style="margin-top:10px"><span>पाठ के नीचे दाईं तरफ़ की लाइन (खाली छोड़ने पर नहीं छपेगी)</span><input type="text" data-p="opts.declFoot" value="' + h(o.declFoot) + '"></div>' : "") +
       (o.sign ? '<div class="fld" style="margin-top:12px"><span>हस्ताक्षर के खाने — हर लाइन में एक नाम (अधिकतम 6)</span><textarea data-p="opts.signLabels" rows="5">' + h(o.signLabels) + "</textarea></div>" : "") +
       "</div></div>";
   }
@@ -431,7 +449,7 @@
     if (tg && tg.dataset && tg.dataset.chk) { setP(tg.dataset.chk, tg.checked); save(); if (ui.step === 3) render(); return; }
     const p = e.target && e.target.dataset && e.target.dataset.p;
     if (p && /\./.test(p) && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); if (ui.step === 3 && /^opts\./.test(p)) render(); }
-    if (p && /^opts\./.test(p) && e.target.tagName === "TEXTAREA" && ui.step === 3) render();
+    if (p && /^opts\./.test(p) && (e.target.tagName === "TEXTAREA" || (e.target.tagName === "INPUT" && e.target.type === "text")) && ui.step === 3) render();
   });
 
   document.addEventListener("click", (e) => {
@@ -467,6 +485,7 @@
       snapshot("अनुसूचि हटाने से पहले"); state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
     else if (act === "pvToggle") { t.closest(".pv-page").classList.toggle("full"); fitPreview(); }
+    else if (act === "partyWord") { setP("opts.partyWord", d.v); save(); render(); }
     else if (act === "pdf") printPdf();
     else if (act === "download") download();
   });
