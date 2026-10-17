@@ -30,12 +30,10 @@
         <button type="button" id="btnImport">📂 DOCX से खोलें</button>
         <button type="button" id="btnPdf">🖨 PDF / प्रिंट</button>
         <button type="button" id="btnTranslit">🔤 English → हिंदी टाइपिंग: <b id="trState">चालू</b></button>
-        <button type="button" id="btnCloud">☁ क्लाउड बैकअप</button>
         <button type="button" id="btnNew" class="danger">🆕 नया फॉर्म</button>
       </div>
     </div>
     <input type="file" id="fileImport" accept=".docx" hidden>
-    <input type="file" id="fileBackup" accept=".json,application/json" hidden>
     <button type="button" class="btn primary" id="btnDownload">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
       DOCX डाउनलोड
@@ -67,18 +65,10 @@
 
 <div id="caseModal" class="modal" hidden>
   <div class="modal-box" role="dialog" aria-label="मेरे केस">
-    <div class="modal-h"><div><h2>📁 मेरे केस</h2><p>हर केस को नाम देकर सेव करें; एडिट करने पर वह केस अपने-आप अपडेट होता रहता है।</p></div><button type="button" class="btn ghost sm" id="caseClose">✕ बंद</button></div>
+    <div class="modal-h"><div><h2>📁 मेरे केस</h2><p>हर केस को नाम देकर इसी ब्राउज़र में सेव करें; एडिट करने पर वह केस अपने-आप अपडेट होता रहता है।</p></div><button type="button" class="btn ghost sm" id="caseClose">✕ बंद</button></div>
     <div class="case-tools"><input type="search" id="caseSearch" placeholder="केस खोजें (नाम / गाँव / रैयत)…"><button type="button" class="btn primary sm" id="caseNew">+ वर्तमान डाटा नए केस में सेव करें</button></div>
     <div class="modal-b" id="caseList"></div>
-    <div class="modal-f split"><span><button type="button" class="btn ghost sm" id="caseExport">⬇ सारे केस की बैकअप फाइल</button> <button type="button" class="btn ghost sm" id="caseImport">⬆ बैकअप फाइल खोलें</button></span><span id="cloudBar"></span></div>
-  </div>
-</div>
-
-<div id="cloudModal" class="modal" hidden>
-  <div class="modal-box" role="dialog" aria-label="क्लाउड बैकअप">
-    <div class="modal-h"><div><h2>☁ क्लाउड बैकअप</h2><p>अपने Google खाते से लॉगिन करके केस किसी भी फोन/कंप्यूटर पर देखें।</p></div><button type="button" class="btn ghost sm" id="cloudClose">✕ बंद</button></div>
-    <div class="modal-b" id="cloudBody"></div>
-  </div>
+      </div>
 </div>
 
 <div id="printRoot"></div>
@@ -92,8 +82,6 @@
 <script src="batwara_template.js"></script>
 <script src="batwara.js"></script>
 <script src="translit.js"></script>
-<script src="firebase-config.js"></script>
-<script src="cloud.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

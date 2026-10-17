@@ -15,10 +15,12 @@ Is site se bani DOCX ke andar poora form-data chhupa rehta hai. Upar "DOCX स�
 - **Hissa apne aap baantna:** khesra ka kul rakba bharo, anusuchi par ✓ lagao, "kul rakba barabar baanto" dabao. "baaki rakba ise do" bacha hua rakba ek anusuchi me daal deta hai.
 - **Kul jod ki jaanch:** Step 4 me raiyat-wise aur anusuchi-wise total aur mismatch.
 - **DOCX/PDF setting:** page number, hastakshar ke khane, kul jod ki pankti, kagaz ka size (auto / A4 / A3 / Legal). "PDF / print" browser ke print se PDF banata hai.
-- **Mere case:** naam dekar case save, search, open, copy, delete; backup file (.json) export/import.
-- **Cloud backup (optional):** `firebase-config.js` me Firebase config daalne par Google login se cases sync hote hain.
+- **Mere case:** naam dekar case save (sirf isi browser me), search, open, copy, delete.
 - **Hindi typing:** English me likho (rajesh kumar), khana chhodte hi Hindi ban jaata hai. Lambi 'aa' ke liye aa likho. Menu me on/off.
 - **Awaaz se bharna:** khane me click karke 🎤 dabao (Chrome/Edge/Safari).
+
+## Purana data wapas
+Sab kuch sirf isi browser me (local storage) save hota hai. "Pichla data" me pichle 20 version rehte hain: naya form / demo / delete / DOCX download se pehle, aur edit ke dauran har kuch minute me apne aap. Galti ho jaye to wahan se "Kholein".
 
 ## DOCX result ke niyam
 - Pankti = jitni khesra entry bhari, utni hi (fixed 5 nahi).

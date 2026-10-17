@@ -711,7 +711,7 @@
     if (!c) { setCur(null); return; }
     const json = JSON.stringify(state);
     if (c.json === json) return;
-    c.json = json; c.ts = Date.now(); casesSave(l); cloudSchedule(c);
+    c.json = json; c.ts = Date.now(); casesSave(l);
   }
   function detachCase() { caseTouch(); setCur(null); }
   function defaultCaseName() {
@@ -735,11 +735,11 @@
         '<button type="button" class="btn danger sm" data-cact="del" data-id="' + h(c.id) + '">हटाएँ</button></div></div>';
     }).join("");
   }
-  function caseOpenModal() { $("#caseSearch").value = ""; $("#cloudBar").innerHTML = '<button type="button" class="btn ghost sm" id="caseCloud">☁ क्लाउड सिंक</button>'; caseRender(); $("#caseModal").hidden = false; }
+  function caseOpenModal() { $("#caseSearch").value = ""; caseRender(); $("#caseModal").hidden = false; }
   const caseClose = () => { $("#caseModal").hidden = true; };
   $("#btnCases").addEventListener("click", caseOpenModal);
   $("#caseClose").addEventListener("click", caseClose);
-  $("#caseModal").addEventListener("click", (e) => { if (e.target.id === "caseModal") caseClose(); if (e.target.id === "caseCloud") { caseClose(); cloudOpen(); } });
+  $("#caseModal").addEventListener("click", (e) => { if (e.target.id === "caseModal") caseClose(); });
   $("#caseSearch").addEventListener("input", caseRender);
   $("#caseNew").addEventListener("click", () => {
     const name = (prompt("इस केस का नाम लिखें:", defaultCaseName()) || "").trim();
@@ -747,17 +747,17 @@
     caseTouch();
     const c = { id: "c" + Date.now() + Math.random().toString(36).slice(2, 6), name, ts: Date.now(), json: JSON.stringify(state) };
     const l = casesLoad(); l.unshift(c);
-    if (casesSave(l)) { setCur(c.id); caseRender(); cloudSchedule(c); toast("केस सेव हो गया — अब बदलाव इसी में सेव होते रहेंगे।"); }
+    if (casesSave(l)) { setCur(c.id); caseRender(); toast("केस सेव हो गया — अब बदलाव इसी में सेव होते रहेंगे।"); }
   });
   $("#caseList").addEventListener("click", (e) => {
     const b = e.target.closest("[data-cact]"); if (!b) return;
     const l = casesLoad(), c = l.find((x) => x.id === b.dataset.id); if (!c) return;
     const act = b.dataset.cact;
-    if (act === "rename") { const n = (prompt("नया नाम:", c.name) || "").trim(); if (!n) return; c.name = n; c.ts = Date.now(); casesSave(l); chip(); caseRender(); cloudSchedule(c); }
-    else if (act === "copy") { const d = { id: "c" + Date.now() + Math.random().toString(36).slice(2, 6), name: c.name + " (कॉपी)", ts: Date.now(), json: c.json }; l.unshift(d); casesSave(l); caseRender(); cloudSchedule(d); }
+    if (act === "rename") { const n = (prompt("नया नाम:", c.name) || "").trim(); if (!n) return; c.name = n; c.ts = Date.now(); casesSave(l); chip(); caseRender(); }
+    else if (act === "copy") { const d = { id: "c" + Date.now() + Math.random().toString(36).slice(2, 6), name: c.name + " (कॉपी)", ts: Date.now(), json: c.json }; l.unshift(d); casesSave(l); caseRender(); }
     else if (act === "del") {
       if (!confirm("केस '" + c.name + "' हमेशा के लिए हट जाएगा। ठीक है?")) return;
-      casesSave(l.filter((x) => x.id !== c.id)); if (curCase === c.id) setCur(null); caseRender(); cloudRemove(c.id);
+      casesSave(l.filter((x) => x.id !== c.id)); if (curCase === c.id) setCur(null); caseRender();
     }
     else if (act === "open") {
       if (c.id !== curCase) {
@@ -770,76 +770,17 @@
       caseClose(); render(); window.scrollTo({ top: 0 }); toast("केस खुल गया: " + c.name);
     }
   });
-  $("#caseExport").addEventListener("click", () => {
-    caseTouch();
-    const l = casesLoad();
-    if (!l.length) { toast("अभी कोई केस सेव नहीं है।", true); return; }
-    const blob = new Blob([JSON.stringify({ app: "batwara", v: 1, cases: l })], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = "batwara_backup_" + new Date().toISOString().slice(0, 10) + ".json";
-    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    toast(l.length + " केस की बैकअप फाइल बन गई।");
-  });
-  $("#caseImport").addEventListener("click", () => $("#fileBackup").click());
-  $("#fileBackup").addEventListener("change", async (e) => {
-    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
-    try {
-      const o = JSON.parse(await f.text());
-      if (!o || o.app !== "batwara" || !Array.isArray(o.cases)) throw new Error("x");
-      const l = casesLoad(), map = {}; l.forEach((c) => { map[c.id] = c; });
-      let n = 0;
-      o.cases.forEach((c) => { if (c && c.id && c.name && c.json && (!map[c.id] || map[c.id].ts < c.ts)) { map[c.id] = { id: c.id, name: c.name, ts: c.ts || Date.now(), json: c.json }; n++; } });
-      if (casesSave(Object.values(map))) { caseRender(); chip(); toast(n + " केस बैकअप से जुड़ गए।"); }
-    } catch (err) { toast("यह बैकअप फाइल सही नहीं है।", true); }
-  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") caseClose(); });
 
-  /* ---------- क्लाउड बैकअप (वैकल्पिक, Firebase) ---------- */
-  let cloudTimer = null;
-  function cloudSchedule(c) {
-    if (!window.BatwaraCloud || !BatwaraCloud.configured() || !BatwaraCloud.user()) return;
-    clearTimeout(cloudTimer); cloudTimer = setTimeout(() => { BatwaraCloud.push([c]).catch(() => {}); }, 4000);
-  }
-  function cloudRemove(id) { if (window.BatwaraCloud && BatwaraCloud.configured() && BatwaraCloud.user()) BatwaraCloud.remove(id).catch(() => {}); }
-  function cloudOpen() { $("#cloudModal").hidden = false; cloudRender(); }
-  const cloudClose = () => { $("#cloudModal").hidden = true; };
-  function cloudRender(msg) {
-    const body = $("#cloudBody");
-    if (!BatwaraCloud.configured()) {
-      body.innerHTML = '<div class="cloud-help"><b>क्लाउड बैकअप अभी चालू नहीं है।</b><p>इसे चालू करने के लिए (एक बार का सेटअप, मुफ़्त):</p><ol>' +
-        '<li><b>console.firebase.google.com</b> पर नया प्रोजेक्ट बनाएँ।</li><li>Authentication → Sign-in method → <b>Google</b> चालू करें; Authentication → Settings → Authorized domains में अपनी साइट का डोमेन (जैसे <i>snaptestpro.github.io</i>) जोड़ें।</li>' +
-        '<li>Firestore Database बनाएँ, फिर Rules में ये लगाएँ:<pre>rules_version = \'2\';\nservice cloud.firestore {\n  match /databases/{db}/documents {\n    match /batwara_users/{uid}/{doc=**} {\n      allow read, write: if request.auth != null\n                         && request.auth.uid == uid;\n    }\n  }\n}</pre></li>' +
-        '<li>Project settings → Your apps → Web app का <b>firebaseConfig</b> कॉपी करके साइट की <b>firebase-config.js</b> फाइल में डालें और GitHub पर अपलोड करें।</li></ol><p>तब तक "मेरे केस" में <b>बैकअप फाइल</b> से भी डाटा दूसरे फोन/कंप्यूटर पर ले जा सकते हैं।</p></div>';
-      return;
-    }
-    const u = BatwaraCloud.user();
-    body.innerHTML = (msg ? '<div class="note">' + h(msg) + "</div>" : "") + (u
-      ? '<div class="cloud-user">✓ साइन इन: <b>' + h(u.email || u.displayName || "") + '</b></div><div class="cloud-act"><button type="button" class="btn primary" id="cloudSync">🔄 अभी सिंक करें</button><button type="button" class="btn ghost" id="cloudOut">साइन आउट</button></div><p class="hint">सिंक में दोनों तरफ़ के केस मिल जाते हैं — जो नया है वही रखा जाता है। साइन इन रहने पर बदलाव अपने-आप क्लाउड में जाते हैं।</p>'
-      : '<div class="cloud-act"><button type="button" class="btn primary" id="cloudIn">Google से साइन इन करें</button></div>');
-  }
-  async function cloudSync() {
-    try {
-      cloudRender("सिंक हो रहा है…");
-      const remote = await BatwaraCloud.pull(), local = casesLoad(), map = {};
-      local.forEach((c) => { map[c.id] = c; });
-      let down = 0, curNewer = false;
-      remote.forEach((r) => { const l = map[r.id]; if (!l || l.ts < r.ts) { map[r.id] = { id: r.id, name: r.name, ts: r.ts, json: r.json }; down++; if (r.id === curCase) curNewer = true; } });
-      const up = local.filter((l) => { const r = remote.find((x) => x.id === l.id); return !r || r.ts < l.ts; });
-      casesSave(Object.values(map));
-      if (up.length) await BatwaraCloud.push(up);
-      if (curNewer && map[curCase]) { state = normalize(JSON.parse(map[curCase].json)); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} render(); }
-      chip(); cloudRender("सिंक पूरा: " + down + " केस नीचे आए, " + up.length + " ऊपर गए।");
-    } catch (err) { cloudRender("सिंक नहीं हो पाया: " + (err.message || err)); }
-  }
-  $("#btnCloud").addEventListener("click", cloudOpen);
-  $("#cloudClose").addEventListener("click", cloudClose);
-  $("#cloudModal").addEventListener("click", async (e) => {
-    if (e.target.id === "cloudModal") cloudClose();
-    if (e.target.id === "cloudIn") { try { await BatwaraCloud.init(); await BatwaraCloud.signIn(); cloudSync(); } catch (err) { cloudRender("साइन इन नहीं हो पाया: " + (err.message || err)); } }
-    if (e.target.id === "cloudOut") { await BatwaraCloud.signOut(); cloudRender(); }
-    if (e.target.id === "cloudSync") cloudSync();
-  });
-  if (window.BatwaraCloud && BatwaraCloud.configured()) BatwaraCloud.init().catch(() => {});
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { caseClose(); cloudClose(); } });
+  /* ---------- अपने-आप पुराना version सेव (गलती हो जाए तो 'पिछला डाटा' से वापस) ---------- */
+  let lastAuto = Date.now();
+  setInterval(() => {
+    if (document.hidden || Date.now() - lastAuto < 4 * 60 * 1000) return;
+    lastAuto = Date.now(); snapshot("अपने-आप सेव (एडिट के दौरान)");
+  }, 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { lastAuto = Date.now(); snapshot("पेज छोड़ते समय का डाटा"); } });
+  // पेज खुलते ही पिछली बार का डाटा सुरक्षित रख लें (जो हिस्सा बदलने वाला हो उससे पहले)
+  snapshot("पिछली बार का डाटा (पेज खुलने पर)");
 
   trLabel(); chip();
   histCount();
