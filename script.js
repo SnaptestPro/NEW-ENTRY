@@ -41,7 +41,7 @@
   const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
   function normalize(st) {
     st.header = st.header || {};
-    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN, decl: true, declText: DEFAULT_DECL, declFoot: "गवाह का हस्त०", partyWord: "auto" }, st.opts || {});
+    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN, decl: true, declText: DEFAULT_DECL, declFoot: "गवाह का हस्त०", partyWord: "auto", rowsPerPage: 12 }, st.opts || {});
     if (st.opts.declText === OLD_DECL) st.opts.declText = DEFAULT_DECL;   // पुराना डिफ़ॉल्ट पाठ → नया (जिसमें संख्या बदली जा सकती है)
     if (st.opts.partyWord == null || String(st.opts.partyWord).trim() === "") st.opts.partyWord = "auto";
     if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [blankSched()];
@@ -341,7 +341,9 @@
       '<label class="chk"><input type="checkbox" data-chk="opts.decl"' + (o.decl ? " checked" : "") + '> <b>घोषणा पाठ</b> ("हम सभी फरीकैन…") + गवाह की लाइन</label>' +
       '<label class="chk"><input type="checkbox" data-chk="opts.sign"' + (o.sign ? " checked" : "") + '> <b>हस्ताक्षर</b> के खाने (अंतिम पेज पर)</label>' +
       '<div class="fld"><span>कागज़ का साइज़ (लैंडस्केप)</span><select data-p="opts.paper">' +
-      [["auto", "अपने-आप (कॉलम के हिसाब से)"], ["A4", "A4"], ["A3", "A3"], ["Legal", "Legal"]].map((x) => '<option value="' + x[0] + '"' + (o.paper === x[0] ? " selected" : "") + ">" + x[1] + "</option>").join("") + "</select></div></div>" +
+      [["auto", "अपने-आप (कॉलम के हिसाब से)"], ["A4", "A4"], ["A3", "A3"], ["Legal", "Legal"]].map((x) => '<option value="' + x[0] + '"' + (o.paper === x[0] ? " selected" : "") + ">" + x[1] + "</option>").join("") + "</select></div>" +
+      '<div class="fld"><span>एक पेज में लगभग कितनी खेसरा पंक्तियाँ</span><input type="number" min="3" max="60" data-p="opts.rowsPerPage" value="' + h(o.rowsPerPage) + '"' + (o.paper !== "auto" ? " disabled" : "") + '></div></div>' +
+      (o.paper === "auto" ? '<div class="note ok">पेज की ऊँचाई-चौड़ाई <b>अपने-आप</b> इतनी बनती है कि लगभग <b>' + (o.rowsPerPage || 12) + '</b> पंक्तियाँ एक पेज में आएँ।</div>' : "") +
       (fixed ? '<div class="note">इस साइज़ पर एक पेज में अधिकतम <b>' + fixed + '</b> अनुसूचि आएँगी; ज़्यादा हों तो अगला पेज बनेगा।</div>' : "") +
       (o.decl ? partyBox(o) : "") +
       (o.decl ? '<div class="fld" style="margin-top:12px"><span>घोषणा पाठ — table के नीचे छपेगा (हर लाइन एक अनुच्छेद; चाहें तो बदल लें)</span><textarea data-p="opts.declText" rows="6">' + h(o.declText) + '</textarea></div><div class="fld" style="margin-top:10px"><span>पाठ के नीचे दाईं तरफ़ की लाइन (खाली छोड़ने पर नहीं छपेगी)</span><input type="text" data-p="opts.declFoot" value="' + h(o.declFoot) + '"></div>' : "") +
@@ -449,7 +451,7 @@
     if (tg && tg.dataset && tg.dataset.chk) { setP(tg.dataset.chk, tg.checked); save(); if (ui.step === 3) render(); return; }
     const p = e.target && e.target.dataset && e.target.dataset.p;
     if (p && /\./.test(p) && e.target.tagName === "SELECT") { setP(p, e.target.value); save(); if (ui.step === 3 && /^opts\./.test(p)) render(); }
-    if (p && /^opts\./.test(p) && (e.target.tagName === "TEXTAREA" || (e.target.tagName === "INPUT" && e.target.type === "text")) && ui.step === 3) render();
+    if (p && /^opts\./.test(p) && (e.target.tagName === "TEXTAREA" || (e.target.tagName === "INPUT" && (e.target.type === "text" || e.target.type === "number"))) && ui.step === 3) render();
   });
 
   document.addEventListener("click", (e) => {

@@ -17,6 +17,7 @@
     return { pageNo: o.pageNo !== false, sign: !!o.sign, signLabels: o.signLabels != null ? String(o.signLabels) : DEFAULT_SIGN,
       totalRow: !!o.totalRow, paper: PAPER[o.paper] ? o.paper : "auto",
       decl: o.decl !== false, declText: o.declText != null ? String(o.declText) : DEFAULT_DECL, declFoot: o.declFoot != null ? String(o.declFoot) : "गवाह का हस्त०",
+      rowsPerPage: Math.max(3, Math.min(60, parseInt(o.rowsPerPage, 10) || 12)),
       partyWord: o.partyWord != null && String(o.partyWord).trim() !== "" ? String(o.partyWord).trim() : "auto" };
   }
   // "हम ___ फरीकैन" में क्या लिखें: auto = अनुसूचि की गिनती से; "-" = कुछ नहीं; वरना जो लिखा हो वही
@@ -128,7 +129,9 @@
     const showAbhi = any((r) => r.abhiyukti);
 
     const opts = getOpts(st), fixed = PAPER[opts.paper];
-    const chunks = splitEven(scheds, fixed ? fixed[2] : MAX_SCHED_PER_PAGE).map((schedChunk) => {
+    const parts = splitEven(scheds, fixed ? fixed[2] : MAX_SCHED_PER_PAGE);
+    const chunks = parts.map((schedChunk) => {
+      const isLast = schedChunk === parts[parts.length - 1];
       const cols = [];
       cols.push({ id: "name", label: ["खतियानी रैयत का", "नाम व पता"], w: W.name });
       if (showLeft.jam) cols.push({ id: "jam", label: ["जमाबंदी", "सांख्या"], w: W.jam });
@@ -163,7 +166,7 @@
       const raw = cols.reduce((a, c) => a + c.w, 0);
       if (raw > usable) cols.forEach((c) => { c.w = Math.floor(c.w * usable / raw); });
       const total = cols.reduce((a, c) => a + c.w, 0);
-      const pageH = fixed ? fixed[1] : Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
+      let pageH = fixed ? fixed[1] : Math.max(11906, Math.min(PAGE_MAX_W, Math.round(pageW * 0.7071)));
       const wAt = (from, span) => cols.slice(from, from + span).reduce((a, c) => a + c.w, 0);
 
       const palOf = (c, dark) => c.blk === undefined ? PAL_LEFT[dark ? 0 : 1] : c.blk === -2 ? PAL_ABHI[dark ? 0 : 1] : PAL[c.blk][dark ? 0 : 1];
@@ -222,6 +225,42 @@
         bodyRows.forEach((r) => { r[ci].sz = sz; });
       });
       bodyRows.forEach((r, ri) => { r.forEach((cell, ci) => { if (cols[ci].id === "name" && !(opts.totalRow && ri === bodyRows.length - 1)) cell.boldFirst = true; }); });
+      // ---- पेज की ऊँचाई: पंक्तियों की असली ऊँचाई से (एक पेज में ≈ rowsPerPage खेसरा) ----
+      if (!fixed) {
+        const MINROW = 520, LH = (z) => z * 15.5, TW = (x, z) => String(x).replace(COMB, "").length * z * 5.8;
+        const nl = (lines, z, w) => Math.max(1, (lines || []).reduce((a, l) => a + Math.max(1, Math.ceil(TW(l, z) / Math.max(200, w - 100))), 0));
+        const hs = bodyRows.map((r) => Math.max.apply(null, [MINROW].concat(r.map((cell, ci) => cell.vm ? 0 : nl(cell.lines, cell.sz || 18, cols[ci].w) * LH(cell.sz || 18) + 80))));
+        bodyRows.forEach((r, i) => r.forEach((cell, ci) => {
+          if (cell.vm !== "restart") return;
+          let j = i; while (j + 1 < bodyRows.length && bodyRows[j + 1][ci].vm === "cont") j++;
+          const need = nl(cell.lines, cell.sz || 18, cols[ci].w) * LH(cell.sz || 18) + 80;
+          let sum = 0; for (let q = i; q <= j; q++) sum += hs[q];
+          if (sum < need) { const add = (need - sum) / (j - i + 1); for (let q = i; q <= j; q++) hs[q] += add; }
+        }));
+        const hb = headerBlock(st.header || {}, pageW), tw = total - 200;
+        let top = 1440;
+        hb.paras.forEach((p) => { top += Math.max(1, Math.ceil(TW(p.runs.map((r) => r.t).join(""), p.sz) / tw)) * LH(p.sz) + 50; });
+        top += 240 + Math.max(1, Math.ceil(TW(hb.info.runs.map((r) => r.t).join(""), hb.info.sz) / tw)) * LH(hb.info.sz) + 220 + 400;
+        let pos = 0, h1 = 0;
+        hdr1.forEach((cell) => { const w = cols.slice(pos, pos + cell.span).reduce((a, c) => a + c.w, 0); pos += cell.span; h1 = Math.max(h1, nl(cell.lines, cell.sz, w) * LH(cell.sz) + 70); });
+        const h2 = Math.max.apply(null, hdr2.map((cell, ci) => cell.vm ? 0 : nl(cell.lines, cell.sz, cols[ci].w) * LH(cell.sz) + 70));
+        top += h1 + h2 + LH(labelSz) + 70;
+        const R = opts.rowsPerPage, n = hs.length;
+        let area = 0;
+        if (n <= R) area = hs.reduce((a, b) => a + b, 0);
+        else for (let i = 0; i + R <= n; i++) { let sm = 0; for (let q = i; q < i + R; q++) sm += hs[q]; area = Math.max(area, sm); }
+        let extra = 0;
+        if (n <= R && isLast) {
+          const dz = declSize(pageW);
+          if (opts.decl) {
+            const dl = fillParty(opts.declText, partyWordFor(opts, scheds.length)).split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+            dl.forEach((l) => { extra += Math.max(1, Math.ceil(TW(l, dz) / tw)) * LH(dz) + 420; });
+            if (opts.declFoot.trim()) extra += LH(dz) + 420;
+          }
+          if (opts.sign) extra += 360 + LH(20) + 1300 + 300;
+        }
+        pageH = Math.max(11906, Math.min(PAGE_MAX_W, Math.round((top + area * 1.06 + extra + 500) / 10) * 10));
+      }
       return { cols, total, pageW, pageH, headRows: [hdr1, hdr2, hdr3], bodyRows };
     });
     return { header: st.header || {}, chunks, rowCount: rows.length, schedCount: scheds.length, opts, decl: opts.decl && (opts.declText.trim() || opts.declFoot.trim()) ? { lines: fillParty(opts.declText, partyWordFor(opts, scheds.length)).split(/\r?\n/).map((x) => x.trim()).filter(Boolean), foot: opts.declFoot.trim() } : null, signLabels: opts.sign ? opts.signLabels.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(0, 6) : [] };
@@ -329,7 +368,7 @@
       bd("top", 12) + bd("left", 12) + bd("bottom", 12) + bd("right", 12) + bd("insideH", 6) + bd("insideV", 6) +
       '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="40" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
       "<w:tblGrid>" + ch.cols.map((c) => '<w:gridCol w:w="' + c.w + '"/>').join("") + "</w:tblGrid>" +
-      ch.headRows.map((r) => rowXml(r, { hdr: true })).join("") + ch.bodyRows.map((r) => rowXml(r, { h: 640 })).join("") + "</w:tbl>";
+      ch.headRows.map((r) => rowXml(r, { hdr: true })).join("") + ch.bodyRows.map((r) => rowXml(r, { h: 500 })).join("") + "</w:tbl>";
   }
 
   /* ---------- DOCX के अंदर पूरा डाटा छिपाकर रखना (ताकि बाद में वही DOCX खोलकर सब वैसा ही भर जाए) ---------- */
