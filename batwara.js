@@ -76,7 +76,8 @@
           k: rk(p.k_ac, p.k_dc), n: rk(p.n_ac, p.n_dc), kd: toDec(p.k_ac, p.k_dc), nd: toDec(p.n_ac, p.n_dc), img: p.abhi_img && p.abhi_img.d ? p.abhi_img : null,
           sch: Array.from({ length: n }, (_, s) => {
             const x = (p.sch && p.sch[s]) || {};
-            return { khata: t(x.khata), khesra: t(x.khesra), k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), kd: toDec(x.k_ac, x.k_dc), nd: toDec(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
+            const has = !!(rk(x.k_ac, x.k_dc) || rk(x.n_ac, x.n_dc));   // हिस्सा है तो ऊपर वाली पंक्ति का खाता/खेसरा अपने-आप
+            return { khata: t(x.khata) || (has ? t(p.khata) : ""), khesra: t(x.khesra) || (has ? t(p.khesra) : ""), k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), kd: toDec(x.k_ac, x.k_dc), nd: toDec(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
           })
         });
       });
