@@ -13,7 +13,7 @@
   const HEADER_FIELDS = [
     ["panchayat", "ग्राम पंचायत राज"], ["halka", "हल्का सांख्या"], ["mauja", "राजस्व ग्राम"],
     ["thana_no", "थाना सांख्या"], ["anchal", "अंचल"], ["police_thana", "पुलिस थाना"],
-    ["anumandal", "अनुमण्डल"], ["rajasva_thana", "राजस्व थाना"], ["jila", "जिला"]
+    ["anumandal", "अनुमण्डल"], ["rajasva_thana", "राजस्व थाना"], ["jila", "जिला"], ["date", "दिनांक (शीर्षक के बगल में)"]
   ];
   const STEPS = [
     ["गाँव / थाना विवरण", "DOCX की ऊपरी पंक्तियाँ"],
@@ -29,7 +29,7 @@
   });
   const blankPlot = (n, prev) => ({
     jamabandi: prev ? prev.jamabandi : "", khata: prev ? prev.khata : "", khesra: "", k_ac: "", k_dc: "", n_ac: "", n_dc: "",
-    abhiyukti: "", sch: Array.from({ length: n }, blankSch)
+    abhi_img: null, sch: Array.from({ length: n }, blankSch)
   });
   // एक रैयत (नाम/पिता/पता एक ही बार) + उसकी कई खेसरा-पंक्तियाँ (plots)
   const blankGroup = (n) => ({ name: "", rel_type: "पिता", rel_naam: "", addr: "", plots: [blankPlot(n)] });
@@ -38,11 +38,13 @@
 
   const OLD_DECL = "हम सभी फरीकैन आपस में सहमति से बखुदहा जमीन बँटवारा कर जोत आबाद कर रहे हैं। दिए शेड्यूल पर अंकित खाता एवं खेसरा एवं रकवा पर भविष्य में एक दूसरे की हिस्से की भूमि पर फरीकैन या उनके वंशज दावा नहीं करेंगे। अगर किसी के द्वारा किसी प्रकार का दावा प्रस्तुत किया जाता है तो वह मान्य नहीं होगा। इस पर हम दोनों फरीकैन को मंजूर है और अपना हस्ताक्षर किया हूँ।";
   const DEFAULT_DECL = "हम सभी फरीकैन आपस में सहमति से बखुदहा जमीन बँटवारा कर जोत आबाद कर रहे हैं। दिए शेड्यूल पर अंकित खाता एवं खेसरा एवं रकवा पर भविष्य में एक दूसरे की हिस्से की भूमि पर फरीकैन या उनके वंशज दावा नहीं करेंगे। अगर किसी के द्वारा किसी प्रकार का दावा प्रस्तुत किया जाता है तो वह मान्य नहीं होगा। इस पर हम {संख्या} फरीकैन को मंजूर है और अपना हस्ताक्षर किया हूँ।";
-  const DEFAULT_SIGN = "पक्षकार के हस्ताक्षर / अँगूठा निशान\nगवाह - 1\nगवाह - 2\nराजस्व कर्मचारी\nअंचल अधिकारी";
+  const DEFAULT_SIGN = "गवाह - 1\nगवाह - 2";
+  const SIGN_DROP = /राजस्व\s*(कर्मचारी|अधिकारी)|अंचल\s*अधिकारी|^पक्षकार\s*के\s*हस्ताक्षर/;
   function normalize(st) {
     st.header = st.header || {};
-    st.opts = Object.assign({ pageNo: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN, decl: true, declText: DEFAULT_DECL, declFoot: "गवाह का हस्त०", partyWord: "auto", rowsPerPage: 12 }, st.opts || {});
+    st.opts = Object.assign({ pageNo: true, border: true, partySign: true, sign: false, totalRow: false, paper: "auto", signLabels: DEFAULT_SIGN, decl: true, declText: DEFAULT_DECL, declFoot: "गवाह का हस्त०", partyWord: "auto", rowsPerPage: 12, design: "colorful" }, st.opts || {});
     if (st.opts.declText === OLD_DECL) st.opts.declText = DEFAULT_DECL;   // पुराना डिफ़ॉल्ट पाठ → नया (जिसमें संख्या बदली जा सकती है)
+    st.opts.signLabels = String(st.opts.signLabels == null ? DEFAULT_SIGN : st.opts.signLabels).split(/\r?\n/).map((x) => x.trim()).filter((x) => x && !SIGN_DROP.test(x)).join("\n");
     if (st.opts.partyWord == null || String(st.opts.partyWord).trim() === "") st.opts.partyWord = "auto";
     if (!Array.isArray(st.schedules) || !st.schedules.length) st.schedules = [blankSched()];
     st.schedules.forEach((x) => { if (x.rel_type == null) x.rel_type = "पिता"; ["rel_naam", "jati", "nivasi"].forEach((k) => { if (x[k] == null) x[k] = ""; }); });
@@ -63,7 +65,7 @@
     (old.rows || []).forEach((r) => {
       const last = st.groups[st.groups.length - 1];
       const same = last && (last.name || "").trim() === (r.name || "").trim() && (last.rel_naam || "").trim() === (r.rel_naam || "").trim() && (last.addr || "").trim() === (r.addr || "").trim();
-      const plot = { jamabandi: r.jamabandi, khata: r.khata, khesra: r.khesra, k_ac: r.k_ac, k_dc: r.k_dc, n_ac: r.n_ac, n_dc: r.n_dc, abhiyukti: r.abhiyukti, sch: r.sch };
+      const plot = { jamabandi: r.jamabandi, khata: r.khata, khesra: r.khesra, k_ac: r.k_ac, k_dc: r.k_dc, n_ac: r.n_ac, n_dc: r.n_dc, sch: r.sch };
       if (same) last.plots.push(plot);
       else st.groups.push({ name: r.name, rel_type: r.rel_type || "पिता", rel_naam: r.rel_naam, addr: r.addr, plots: [plot] });
     });
@@ -140,7 +142,7 @@
       "<span>ऊपर (कॉलम 5-6) में कुल रकवा भरते ही यहाँ बँटवारे का मिलान दिखेगा।</span>";
   }
   const plotHasData = (r) =>
-    ["jamabandi", "khata", "khesra", "k_ac", "k_dc", "n_ac", "n_dc", "abhiyukti"].some((k) => String(r[k] || "").trim()) ||
+    ["jamabandi", "khata", "khesra", "k_ac", "k_dc", "n_ac", "n_dc"].some((k) => String(r[k] || "").trim()) || !!(r.abhi_img && r.abhi_img.d) ||
     r.sch.some((s) => Object.keys(s).some((k) => String(s[k] || "").trim()));
 
   /* ---------- field builders ---------- */
@@ -179,7 +181,7 @@
   function panelHeader() {
     return '<div class="card"><div class="card-h"><div><h2>गाँव / थाना विवरण</h2><div class="hint">ये जानकारी DOCX के सबसे ऊपर वाली दो पंक्तियों में अपने-आप भर जाएगी (सभी पेज पर)।</div></div></div>' +
       '<div class="card-b"><div class="grid g3">' +
-      HEADER_FIELDS.map((f) => fld("header." + f[0], f[1])).join("") +
+      HEADER_FIELDS.map((f) => fld("header." + f[0], f[1], f[0] === "date" ? { ph: "जैसे: 19/10/2026 (खाली छोड़ें तो ……… छपेगा)" } : {})).join("") +
       '</div><div class="live-line" id="hdrPreview">' + headerPreview() + "</div></div></div>";
   }
 
@@ -281,7 +283,10 @@
       '<div class="split-bar"><span>जिन अनुसूचियों में हिस्सा है उन पर ✓ लगाएँ, फिर →</span><button type="button" class="btn primary sm" data-act="splitEq" data-g="' + gi + '" data-p="' + pi + '">⚖ कुल रकवा बराबर बाँटो</button></div>' +
       '<div class="sch-grid">' + state.schedules.map((_, k) => schCard(gi, pi, k)).join("") + "</div>" +
       '<div class="bal" data-bal="' + key + '">' + balHtml(r) + "</div></div>" +
-      '<div class="sec"><div class="grid g2">' + fld(P + "abhiyukti", "अभियुक्ति (वैकल्पिक)", { cls: "span2" }) + "</div></div></div>";
+      '<div class="sec"><div class="sec-t">अभियुक्ति — प्लॉट की फोटो <small>कुछ लिखना नहीं है; सिर्फ़ उस खेसरा के नक्शे की फोटो लगाएँ (जैसे नीला/ग्रे रंग वाला प्लॉट)</small></div>' +
+      '<div class="abhi-up">' + (r.abhi_img && r.abhi_img.d ? '<img class="abhi-thumb" alt="अभियुक्ति फोटो" src="' + r.abhi_img.d + '">' : '<div class="abhi-empty">अभी फोटो नहीं लगी</div>') +
+      '<div class="abhi-btns"><label class="btn soft sm">📷 ' + (r.abhi_img && r.abhi_img.d ? "फोटो बदलें" : "फोटो चुनें") + '<input type="file" accept="image/*" hidden data-abhi="' + gi + "-" + pi + '"></label>' +
+      (r.abhi_img && r.abhi_img.d ? '<button type="button" class="btn danger sm" data-act="abhiDel" data-g="' + gi + '" data-p="' + pi + '">हटाएँ</button>' : "") + "</div></div></div></div>";
   }
   function panelRows() {
     const cards = state.groups.map((g, gi) => {
@@ -319,6 +324,24 @@
       cards + '<button type="button" class="add-row" data-act="addGroup">+ नया रैयत जोड़ें</button>';
   }
 
+  /* ---------- Step 4 : डिज़ाइन चुनना ---------- */
+  function designCard() {
+    const th = BatwaraDocx.themes, cur = state.opts.design || "colorful";
+    const card = (id) => {
+      const T = th[id], on = id === cur;
+      const hdr = T.blocks.slice(0, 3).map((b) => '<i style="background:#' + b[0] + '"></i>').join("");
+      return '<button type="button" class="dz' + (on ? " on" : "") + '" data-act="design" data-v="' + id + '">' +
+        '<div class="dz-page" style="border-color:#' + T.boxBorder + '"><div class="dz-title" style="color:#' + T.title + ";" + (T.rule ? "border-bottom:2px solid #" + T.rule : "border-bottom:1px solid #999") + '">पंचनामा बँटवारा</div>' +
+        '<div class="dz-info" style="background:#' + T.infoFill + ';border-color:#' + T.boxBorder + '"></div>' +
+        '<div class="dz-hdr"><i style="background:#' + T.left[0] + '"></i>' + hdr + "</div>" +
+        '<div class="dz-sub"><i style="background:#' + T.left[1] + '"></i>' + T.blocks.slice(0, 3).map((b) => '<i style="background:#' + b[1] + '"></i>').join("") + "</div>" +
+        '<div class="dz-row"></div><div class="dz-row" style="' + (T.zebra ? "background:#" + T.zebra : "") + '"></div><div class="dz-row"></div></div>' +
+        '<b>' + h(T.label) + "</b><small>" + h(T.note) + "</small>" + (on ? '<em>✓ चुना हुआ</em>' : "") + "</button>";
+    };
+    return '<div class="card"><div class="card-h"><div><h2>डिज़ाइन चुनें</h2><div class="hint">DOCX, PDF और नीचे के नमूने — तीनों में यही डिज़ाइन आएगा।</div></div></div><div class="card-b"><div class="dz-grid">' +
+      Object.keys(th).map(card).join("") + "</div></div></div>";
+  }
+
   /* ---------- Step 4 : सेटिंग + कुल जोड़ ---------- */
   function partyBox(o) {
     const n = state.schedules.length;
@@ -339,7 +362,9 @@
       '<label class="chk"><input type="checkbox" data-chk="opts.pageNo"' + (o.pageNo ? " checked" : "") + '> पृष्ठ संख्या (नीचे "पृष्ठ 1 / 2")</label>' +
       '<label class="chk"><input type="checkbox" data-chk="opts.totalRow"' + (o.totalRow ? " checked" : "") + '> अंत में <b>कुल जोड़</b> की पंक्ति</label>' +
       '<label class="chk"><input type="checkbox" data-chk="opts.decl"' + (o.decl ? " checked" : "") + '> <b>घोषणा पाठ</b> ("हम सभी फरीकैन…") + गवाह की लाइन</label>' +
-      '<label class="chk"><input type="checkbox" data-chk="opts.sign"' + (o.sign ? " checked" : "") + '> <b>हस्ताक्षर</b> के खाने (अंतिम पेज पर)</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.border"' + (o.border ? " checked" : "") + '> <b>बॉर्डर</b> — हर पेज के चारों तरफ़</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.partySign"' + (o.partySign ? " checked" : "") + '> <b>पक्षकार का हस्ताक्षर</b> — हर अनुसूचि के नीचे अलग-अलग</label>' +
+      '<label class="chk"><input type="checkbox" data-chk="opts.sign"' + (o.sign ? " checked" : "") + '> <b>गवाह आदि</b> के हस्ताक्षर के खाने (अंतिम पेज पर)</label>' +
       '<div class="fld"><span>कागज़ का साइज़ (लैंडस्केप)</span><select data-p="opts.paper">' +
       [["auto", "अपने-आप (कॉलम के हिसाब से)"], ["A4", "A4"], ["A3", "A3"], ["Legal", "Legal"]].map((x) => '<option value="' + x[0] + '"' + (o.paper === x[0] ? " selected" : "") + ">" + x[1] + "</option>").join("") + "</select></div>" +
       '<div class="fld"><span>एक पेज में लगभग कितनी खेसरा पंक्तियाँ</span><input type="number" min="3" max="60" data-p="opts.rowsPerPage" value="' + h(o.rowsPerPage) + '"' + (o.paper !== "auto" ? " disabled" : "") + '></div></div>' +
@@ -347,7 +372,7 @@
       (fixed ? '<div class="note">इस साइज़ पर एक पेज में अधिकतम <b>' + fixed + '</b> अनुसूचि आएँगी; ज़्यादा हों तो अगला पेज बनेगा।</div>' : "") +
       (o.decl ? partyBox(o) : "") +
       (o.decl ? '<div class="fld" style="margin-top:12px"><span>घोषणा पाठ — table के नीचे छपेगा (हर लाइन एक अनुच्छेद; चाहें तो बदल लें)</span><textarea data-p="opts.declText" rows="6">' + h(o.declText) + '</textarea></div><div class="fld" style="margin-top:10px"><span>पाठ के नीचे दाईं तरफ़ की लाइन (खाली छोड़ने पर नहीं छपेगी)</span><input type="text" data-p="opts.declFoot" value="' + h(o.declFoot) + '"></div>' : "") +
-      (o.sign ? '<div class="fld" style="margin-top:12px"><span>हस्ताक्षर के खाने — हर लाइन में एक नाम (अधिकतम 6)</span><textarea data-p="opts.signLabels" rows="5">' + h(o.signLabels) + "</textarea></div>" : "") +
+      (o.sign ? '<div class="fld" style="margin-top:12px"><span>गवाह आदि के खाने — हर लाइन में एक नाम (अधिकतम 6)</span><textarea data-p="opts.signLabels" rows="5">' + h(o.signLabels) + "</textarea></div>" : "") +
       "</div></div>";
   }
   function totalsCard(flat) {
@@ -376,7 +401,7 @@
     const flat = [];
     state.groups.forEach((g, gi) => g.plots.forEach((p, pi) => { if (plotHasData(p)) flat.push({ g, gi, p, pi }); }));
     const checks = [];
-    const missing = HEADER_FIELDS.filter((f) => !String(state.header[f[0]] || "").trim()).map((f) => f[1]);
+    const missing = HEADER_FIELDS.filter((f) => f[0] !== "date" && !String(state.header[f[0]] || "").trim()).map((f) => f[1]);
     checks.push(missing.length ? ["warn", "गाँव / थाना विवरण अधूरा: " + missing.join(", ")] : ["ok", "गाँव / थाना विवरण पूरा है।"]);
     const unnamed = state.schedules.map((s, i) => (String(s.name || "").trim() ? null : i + 1)).filter(Boolean);
     checks.push(unnamed.length ? ["warn", "इन अनुसूचियों में नाम (बनाम) नहीं भरा: " + unnamed.join(", ")] : ["ok", "सभी अनुसूचियों के नाम भरे हैं।"]);
@@ -401,7 +426,7 @@
       '<div class="card"><div class="card-h"><h2>पंक्तियों का सार</h2></div><div class="card-b tbl-wrap">' +
       (flat.length ? '<table class="tbl"><thead><tr><th>क्र.</th><th>रैयत</th><th>जमाबंदी</th><th>खाता</th><th>खेसरा</th><th>खतियानी रकवा</th><th>नक्शा रकवा</th><th>बँटवारा</th></tr></thead><tbody>' + trs + "</tbody></table>" : "<p>कोई पंक्ति नहीं।</p>") +
       "</div></div>" +
-      optionsCard() + totalsCard(flat) +
+      designCard() + optionsCard() + totalsCard(flat) +
       '<div class="card"><div class="card-b dl-box"><div><h2 style="margin:0 0 4px;color:var(--navy)">DOCX तैयार करें</h2><p>' + flat.length + " पंक्ति · " + state.schedules.length + " अनुसूचि · " + pages + " पेज (एक पेज पर अधिकतम 5 अनुसूचि, पेज का साइज़ अपने-आप)</p></div>" +
       '<div class="dl-btns"><button type="button" class="btn primary lg" data-act="download">⬇ DOCX डाउनलोड करें</button><button type="button" class="btn soft lg" data-act="pdf">🖨 PDF / प्रिंट</button></div></div></div>';
   }
@@ -445,8 +470,30 @@
     setP(p, e.target.value);
     save(); updateLive();
   });
+  // फोटो को छोटा करके (अधिकतम 800px, JPEG) रखना — ताकि browser की जगह और DOCX दोनों हल्के रहें
+  function loadAbhiImage(file, gi, pi) {
+    if (!file || !/^image\//.test(file.type)) { toast("सिर्फ़ फोटो (image) चुनें।", true); return; }
+    const rd = new FileReader();
+    rd.onerror = () => toast("फोटो पढ़ी नहीं जा सकी।", true);
+    rd.onload = () => {
+      const im = new Image();
+      im.onerror = () => toast("यह फोटो खुल नहीं पाई।", true);
+      im.onload = () => {
+        const MAXD = 800, k = Math.min(1, MAXD / Math.max(im.naturalWidth, im.naturalHeight));
+        const w = Math.max(1, Math.round(im.naturalWidth * k)), hh = Math.max(1, Math.round(im.naturalHeight * k));
+        const cv = document.createElement("canvas"); cv.width = w; cv.height = hh;
+        const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, hh); cx.drawImage(im, 0, 0, w, hh);
+        const plot = state.groups[gi] && state.groups[gi].plots[pi]; if (!plot) return;
+        plot.abhi_img = { d: cv.toDataURL("image/jpeg", 0.82), w, h: hh };
+        save(); render(); toast("फोटो लग गई।");
+      };
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  }
   document.addEventListener("change", (e) => {
     const tg = e.target;
+    if (tg && tg.dataset && tg.dataset.abhi) { const [g, p] = tg.dataset.abhi.split("-").map(Number); const f = tg.files && tg.files[0]; tg.value = ""; loadAbhiImage(f, g, p); return; }
     if (tg && tg.dataset && tg.dataset.pick) { const [g, p, k] = tg.dataset.pick.split("-").map(Number); pickOf(g, p)[k] = tg.checked; return; }
     if (tg && tg.dataset && tg.dataset.chk) { setP(tg.dataset.chk, tg.checked); save(); if (ui.step === 3) render(); return; }
     const p = e.target && e.target.dataset && e.target.dataset.p;
@@ -463,6 +510,7 @@
     else if (act === "toggleGroup") { ui.openGroup = ui.openGroup === gi ? -1 : gi; render(); }
     else if (act === "togglePlot") { ui.openPlot[gi] = ui.openPlot[gi] === pi ? -1 : pi; render(); }
     else if (act === "splitEq") splitEqual(gi, pi);
+    else if (act === "abhiDel") { state.groups[gi].plots[pi].abhi_img = null; save(); render(); }
     else if (act === "restFill") fillRest(gi, pi, s);
     else if (act === "addGroup") { state.groups.push(blankGroup(n)); ui.openGroup = state.groups.length - 1; ui.openPlot[ui.openGroup] = 0; save(); render(); }
     else if (act === "addPlot") {
@@ -487,6 +535,7 @@
       snapshot("अनुसूचि हटाने से पहले"); state.schedules.splice(s, 1); state.groups.forEach((g) => g.plots.forEach((r) => r.sch.splice(s, 1))); ui.schTab = {}; save(); render();
     }
     else if (act === "pvToggle") { t.closest(".pv-page").classList.toggle("full"); fitPreview(); }
+    else if (act === "design") { setP("opts.design", d.v); save(); render(); }
     else if (act === "partyWord") { setP("opts.partyWord", d.v); save(); render(); }
     else if (act === "pdf") printPdf();
     else if (act === "download") download();
@@ -638,7 +687,7 @@
       plot("1325", "57", "312", 60, eq(60, [0, 1, 2, 3, 4]))
     ] };
     const g3 = { name: "मोहन यादव", rel_type: "पिता", rel_naam: "स्व० बालेश्वर यादव", addr: "ग्राम रीगा, पो० रीगा, सीतामढ़ी", plots: [
-      plot("1330", "61", "405", 75, eq(75, [0, 1, 2, 3, 4]), { abhiyukti: "वारिसान" }),
+      plot("1330", "61", "405", 75, eq(75, [0, 1, 2, 3, 4])),
       plot("1330", "61", "406", 40, { 0: 20, 2: 20 })
     ] };
     Object.assign(g3.plots[0].sch[2], chau);
@@ -692,7 +741,7 @@
     trOn = !trOn; try { localStorage.setItem("batwaraTranslit", trOn ? "1" : "0"); } catch (e) {}
     trLabel(); toast("English → हिंदी टाइपिंग " + (trOn ? "चालू" : "बंद"));
   });
-  const NOTR = /(jamabandi|khata|khesra|k_ac|k_dc|n_ac|n_dc|_ref|thana_no)$/;
+  const NOTR = /(jamabandi|khata|khesra|k_ac|k_dc|n_ac|n_dc|_ref|thana_no|header\.date)$/;
   const textField = (el) => el && el.dataset && el.dataset.p && ((el.tagName === "INPUT" && el.type === "text") || el.tagName === "TEXTAREA") && !NOTR.test(el.dataset.p) && !/^opts\./.test(el.dataset.p);
   document.addEventListener("change", (e) => {
     const el = e.target;
