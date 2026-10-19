@@ -15,3 +15,8 @@ Reference screenshots (asli DLRS Bihar site, trhbhusurvey.bihar.gov.in) se pixel
 Baaki sab (Tab 3 चौहद्दी, Tab 4, bottom "New Entry/Tab" bar, save/load/localStorage logic) waisa hi hai — koi reference screenshot nahi tha un tabs ka to unka structure/colors पहले jaisa hi rakha.
 
 Files: `index.html`, `style.css`, `script.js` — teeno me changes hain. `node --check script.js` se syntax verify kar liya hai.
+
+# v3 — ऑटो स्केच
+- `plotsketch.js` (नया, ~300 लाइन, ब्राउज़र में ही चलता है): `detect` (रंग/टैप से प्लॉट, छेद भरना, किनारे चिकने, बहुभुज), `layout` (रकवा-अनुपात पर समान्तर कटाव, auto दिशा), `draw` (सफ़ेद बैकग्राउंड, रंगीन हिस्से, नाम + रकवा).
+- `script.js`: अभियुक्ति section बदला; `openSketch` वाला modal; `plot.abhi_cfg` में दिशा/हिस्से/टैप-बिंदु सेव होते हैं (मूल फोटो सेव नहीं होती, सिर्फ़ बना स्केच).
+- `style.css` के अंत में `.sk-*` स्टाइल, `index.html` में `plotsketch.js` का tag.

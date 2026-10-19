@@ -78,7 +78,7 @@
   }
 
   let state = load();
-  const ui = { step: 0, openGroup: 0, openPlot: {}, schTab: {}, pick: {} };
+  const ui = { step: 0, openGroup: 0, openPlot: {}, schTab: {}, pick: {}, origs: {} };
 
   let saveTimer = null;
   function save() {
@@ -283,9 +283,11 @@
       '<div class="split-bar"><span>जिन अनुसूचियों में हिस्सा है उन पर ✓ लगाएँ, फिर →</span><button type="button" class="btn primary sm" data-act="splitEq" data-g="' + gi + '" data-p="' + pi + '">⚖ कुल रकवा बराबर बाँटो</button></div>' +
       '<div class="sch-grid">' + state.schedules.map((_, k) => schCard(gi, pi, k)).join("") + "</div>" +
       '<div class="bal" data-bal="' + key + '">' + balHtml(r) + "</div></div>" +
-      '<div class="sec"><div class="sec-t">अभियुक्ति — प्लॉट की फोटो <small>कुछ लिखना नहीं है; सिर्फ़ उस खेसरा के नक्शे की फोटो लगाएँ (जैसे नीला/ग्रे रंग वाला प्लॉट)</small></div>' +
-      '<div class="abhi-up">' + (r.abhi_img && r.abhi_img.d ? '<img class="abhi-thumb" alt="अभियुक्ति फोटो" src="' + r.abhi_img.d + '">' : '<div class="abhi-empty">अभी फोटो नहीं लगी</div>') +
-      '<div class="abhi-btns"><label class="btn soft sm">📷 ' + (r.abhi_img && r.abhi_img.d ? "फोटो बदलें" : "फोटो चुनें") + '<input type="file" accept="image/*" hidden data-abhi="' + gi + "-" + pi + '"></label>' +
+      '<div class="sec"><div class="sec-t">अभियुक्ति — प्लॉट का स्केच <small>नक्शे की फोटो डालें — सिर्फ़ चुना हुआ प्लॉट अलग होकर, हिस्सों में बँटा साफ़ स्केच अपने-आप बनेगा</small></div>' +
+      '<div class="abhi-up">' + (r.abhi_img && r.abhi_img.d ? '<img class="abhi-thumb" alt="अभियुक्ति" src="' + r.abhi_img.d + '">' : '<div class="abhi-empty">अभी स्केच नहीं लगा</div>') +
+      '<div class="abhi-btns"><label class="btn primary sm">✨ नक्शे की फोटो चुनें (ऑटो स्केच)<input type="file" accept="image/*" hidden data-abhi="' + gi + "-" + pi + '" data-mode="auto"></label>' +
+      (ui.origs[key] ? '<button type="button" class="btn soft sm" data-act="sketchEdit" data-g="' + gi + '" data-p="' + pi + '">✎ स्केच बदलें</button>' : "") +
+      '<label class="btn soft sm" title="फोटो जैसी है वैसी ही लगेगी">🖼 सादी फोटो (बिना बदलाव)<input type="file" accept="image/*" hidden data-abhi="' + gi + "-" + pi + '" data-mode="raw"></label>' +
       (r.abhi_img && r.abhi_img.d ? '<button type="button" class="btn danger sm" data-act="abhiDel" data-g="' + gi + '" data-p="' + pi + '">हटाएँ</button>' : "") + "</div></div></div></div>";
   }
   function panelRows() {
@@ -463,6 +465,149 @@
   }
   function go(i) { ui.step = Math.max(0, Math.min(STEPS.length - 1, i)); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
+  /* ---------- ऑटो स्केच: नक्शे की फोटो → सिर्फ़ चुना हुआ प्लॉट, हिस्सों में बँटा (plotsketch.js) ---------- */
+  const sk = { gi: 0, pi: 0, key: "", cv: null, img: null, seed: null, tol: 34, dir: "auto", rev: false, picks: [], fill: false, det: null, lay: null, built: false };
+  function skAnalysisCanvas(im) {
+    const MAXD = 640, k = Math.min(1, MAXD / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth * k)), hh = Math.max(1, Math.round(im.naturalHeight * k));
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = hh;
+    const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, hh); cx.drawImage(im, 0, 0, w, hh);
+    return cv;
+  }
+  function loadSketchImage(file, gi, pi) {
+    if (!file || !/^image\//.test(file.type)) { toast("सिर्फ़ फोटो (image) चुनें।", true); return; }
+    const rd = new FileReader();
+    rd.onerror = () => toast("फोटो पढ़ी नहीं जा सकी।", true);
+    rd.onload = () => {
+      const im = new Image();
+      im.onerror = () => toast("यह फोटो खुल नहीं पाई।", true);
+      im.onload = () => { ui.origs[gi + "-" + pi] = skAnalysisCanvas(im); sk.seed = null; sk.built = false; openSketch(gi, pi, true); };
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  }
+  // फॉर्म से अपने-आप: खेसरा नं॰, कुल रकवा, कौन-कौन से हिस्से, किसका कितना रकवा
+  function skData() {
+    const plot = state.groups[sk.gi].plots[sk.pi], kT = toD(plot.k_ac, plot.k_dc), nT = toD(plot.n_ac, plot.n_dc);
+    const basis = kT != null ? "k" : nT != null ? "n" : null, total = basis === "k" ? kT : basis === "n" ? nT : null;
+    const items = state.schedules.map((sc, k) => {
+      const x = plot.sch[k], share = basis === "k" ? toD(x.k_ac, x.k_dc) : basis === "n" ? toD(x.n_ac, x.n_dc) : null;
+      const nm = (sc.name || "").trim();
+      return { k, name: nm, short: nm ? nm.split(/\s+/)[0].slice(0, 12) : "अनुसूचि", share: share > 0 ? share : null };
+    });
+    return { plot, kT, nT, basis, total, items };
+  }
+  function skParts(D) {
+    const sel = D.items.filter((it) => sk.picks[it.k]);
+    const entered = sel.filter((s) => s.share), empty = sel.filter((s) => !s.share);
+    const eSum = entered.reduce((a, s) => a + s.share, 0);
+    const remain = D.total != null ? Math.max(0, D.total - eSum) : null;
+    const fallback = entered.length ? Math.min.apply(null, entered.map((e) => e.share)) : 1;
+    const w = sel.map((s) => (s.share ? s.share : remain != null && remain > 0 ? remain / empty.length : fallback));
+    const sum = w.reduce((a, b) => a + b, 0) || 1;
+    return { sel, w, sum, area: sel.map((s, i) => (s.share ? s.share : D.total != null ? (w[i] / sum) * D.total : null)) };
+  }
+  function skEnsureModal() {
+    if ($("#skModal")) return;
+    const m = document.createElement("div"); m.id = "skModal"; m.className = "modal"; m.hidden = true;
+    m.innerHTML = '<div class="modal-box sk-box" role="dialog" aria-label="प्लॉट स्केच">' +
+      '<div class="modal-h"><div><h2>✨ प्लॉट स्केच (ऑटो)</h2><p>नक्शे से सिर्फ़ चुना हुआ प्लॉट अलग होता है; खेसरा नं॰, रकवा और हिस्से फॉर्म से अपने-आप आते हैं।</p></div><button type="button" class="btn ghost sm" id="skClose">✕ बंद</button></div>' +
+      '<div class="modal-b sk-b"><div id="skInfo" class="sk-info"></div><div id="skMsg"></div>' +
+      '<div class="sk-views"><div class="sk-v"><div class="sk-cap">1. आपकी फोटो — गलत प्लॉट चुना हो तो <b>सही प्लॉट के अंदर टैप करें</b></div><div class="sk-wrap"><canvas id="skSrc"></canvas></div></div>' +
+      '<div class="sk-v"><div class="sk-cap">2. बना हुआ स्केच (सिर्फ़ यही अभियुक्ति में लगेगा)</div><div class="sk-wrap"><canvas id="skOut"></canvas></div></div></div>' +
+      '<div class="sk-ctl"><div class="fld"><span>कितने हिस्सों में बँटेगा <i>(✓ वाली अनुसूचियाँ)</i></span><div id="skPicks" class="sk-picks"></div></div>' +
+      '<div class="sk-row"><div class="fld"><span>बँटवारे की रेखाएँ</span><select id="skDir"><option value="auto">अपने-आप (लंबाई के हिसाब से)</option><option value="v">खड़ी रेखाएँ (Vertical)</option><option value="h">आड़ी रेखाएँ (Horizontal)</option><option value="long">प्लॉट की लंबाई के साथ (तिरछी)</option></select></div>' +
+      '<div class="fld"><span>रंग की सहनशीलता <i id="skTolV"></i></span><input type="range" id="skTol" min="12" max="80" step="2"></div></div>' +
+      '<label class="chk"><input type="checkbox" id="skRev"> हिस्सों का क्रम उलटा करें (दाएँ↔बाएँ / ऊपर↔नीचे)</label>' +
+      '<label class="chk"><input type="checkbox" id="skFill"> जिन हिस्सों का रकवा खाली है, उनमें अनुपात से रकवा फॉर्म में भी भर दो</label></div>' +
+      '<div class="sk-note">रेखाएँ रकवा के <b>अनुपात</b> में खींची जाती हैं। यह अनुमानित नक्शा है, असली नाप (अमीन की नापी) नहीं — बराबर रकवा का दावा नहीं।</div></div>' +
+      '<div class="modal-f split"><button type="button" class="btn soft sm" id="skAuto">↺ स्वतः पहचान</button><span><button type="button" class="btn ghost sm" id="skCancel">रद्द</button> <button type="button" class="btn primary" id="skApply">✓ यह स्केच लगाओ</button></span></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener("click", (e) => { if (e.target.id === "skModal" || e.target.id === "skClose" || e.target.id === "skCancel") skClose(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !m.hidden) skClose(); });
+    $("#skApply").addEventListener("click", skApply);
+    $("#skAuto").addEventListener("click", () => { sk.seed = null; skRefresh(true); });
+    $("#skDir").addEventListener("change", (e) => { sk.dir = e.target.value; skRefresh(false); });
+    $("#skRev").addEventListener("change", (e) => { sk.rev = e.target.checked; skRefresh(false); });
+    $("#skFill").addEventListener("change", (e) => { sk.fill = e.target.checked; });
+    let tt; $("#skTol").addEventListener("input", (e) => { sk.tol = Number(e.target.value); $("#skTolV").textContent = sk.tol; clearTimeout(tt); tt = setTimeout(() => skRefresh(true), 160); });
+    $("#skPicks").addEventListener("change", (e) => { const k = e.target.dataset && e.target.dataset.skpick; if (k != null) { sk.picks[Number(k)] = e.target.checked; skRefresh(false); } });
+    $("#skSrc").addEventListener("click", (e) => {
+      const c = e.currentTarget, r = c.getBoundingClientRect();
+      sk.seed = { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height };
+      skRefresh(true);
+    });
+  }
+  function skClose() { const m = $("#skModal"); if (m) m.hidden = true; }
+  function openSketch(gi, pi, fresh) {
+    const key = gi + "-" + pi, cv = ui.origs[key];
+    if (!cv) { toast("पहले नक्शे की फोटो चुनें (यह फोटो इस सेशन में याद नहीं रही)।", true); return; }
+    if (!window.PlotSketch) { toast("स्केच मॉड्यूल लोड नहीं हुआ।", true); return; }
+    skEnsureModal();
+    sk.gi = gi; sk.pi = pi; sk.key = key; sk.cv = cv;
+    sk.img = { w: cv.width, h: cv.height, data: cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data };
+    const plot = state.groups[gi].plots[pi], cfg = !fresh && plot.abhi_cfg ? plot.abhi_cfg : null;
+    // हिस्से: पहले से सेव हो तो वही; वरना जिनमें रकवा भरा है वे — और अगर कुल रकवा अभी बाकी है तो सारी अनुसूचियाँ (बाकी रकवा खाली वालों में बँटेगा)
+    const D0 = skData(), eSum = D0.items.reduce((a, it) => a + (it.share || 0), 0);
+    const restLeft = D0.total != null && D0.total - eSum > 0.005 && D0.items.some((it) => !it.share);
+    sk.picks = cfg && Array.isArray(cfg.picks) && cfg.picks.length === state.schedules.length ? cfg.picks.slice() : restLeft ? state.schedules.map(() => true) : pickOf(gi, pi).slice();
+    sk.dir = cfg ? cfg.dir || "auto" : "auto"; sk.rev = !!(cfg && cfg.rev); sk.tol = cfg && cfg.tol ? cfg.tol : 34; sk.fill = false;
+    sk.seed = cfg && cfg.seed ? { x: cfg.seed.fx * cv.width, y: cfg.seed.fy * cv.height } : (fresh ? null : sk.seed);
+    $("#skDir").value = sk.dir; $("#skRev").checked = sk.rev; $("#skFill").checked = false; $("#skTol").value = sk.tol; $("#skTolV").textContent = sk.tol;
+    $("#skModal").hidden = false;
+    skRefresh(true);
+  }
+  function skRefresh(redetect) {
+    const D = skData(), P = skParts(D), msg = $("#skMsg"), src = $("#skSrc"), out = $("#skOut");
+    // जानकारी (अपने-आप)
+    const plot = D.plot, noTxt = (plot.khesra || "").trim() ? "खेसरा <b>" + h(plot.khesra) + "</b>" : '<span class="bad">खेसरा नं॰ खाली है</span>';
+    const totTxt = D.total != null ? "कुल रकवा (" + (D.basis === "k" ? "खतियानी" : "नक्शा") + ") <b>" + fmtD(D.total) + "</b>" : '<span class="bad">कुल रकवा खाली है</span>';
+    $("#skInfo").innerHTML = "<span>" + noTxt + "</span><span>" + totTxt + "</span><span>हिस्से <b>" + P.sel.length + "</b></span>";
+    $("#skPicks").innerHTML = D.items.map((it) => '<label class="sk-pick"><input type="checkbox" data-skpick="' + it.k + '"' + (sk.picks[it.k] ? " checked" : "") + '> <b>' + (it.k + 1) + "</b> " + (it.name ? h(it.name) : "अनुसूचि " + (it.k + 1)) + (it.share ? " <small>" + fmtD(it.share) + "</small>" : "") + "</label>").join("");
+    if (redetect || !sk.det) sk.det = PlotSketch.detect(sk.img, { seed: sk.seed, tol: sk.tol });
+    const det = sk.det;
+    // बाएँ: फोटो + पहचाना हुआ प्लॉट
+    src.width = sk.img.w; src.height = sk.img.h;
+    const sx = src.getContext("2d"); sx.drawImage(sk.cv, 0, 0);
+    if (det.ok) {
+      sx.beginPath(); det.poly.forEach((p, i) => (i ? sx.lineTo(p[0], p[1]) : sx.moveTo(p[0], p[1]))); sx.closePath();
+      sx.fillStyle = "rgba(220,38,38,.16)"; sx.fill(); sx.lineWidth = Math.max(2, sk.img.w / 220); sx.strokeStyle = "#dc2626"; sx.stroke();
+    }
+    if (sk.seed) { sx.beginPath(); sx.arc(sk.seed.x, sk.seed.y, Math.max(4, sk.img.w / 130), 0, 7); sx.fillStyle = "#2563eb"; sx.fill(); sx.lineWidth = 2; sx.strokeStyle = "#fff"; sx.stroke(); }
+    sk.built = false; $("#skApply").disabled = true;
+    if (!det.ok) { msg.innerHTML = '<div class="note err">' + h(det.msg) + "</div>"; out.width = 1; out.height = 1; out.style.display = "none"; return; }
+    out.style.display = "";
+    const weights = P.w.length ? P.w : [1];
+    sk.lay = PlotSketch.layout(det, { weights, dir: sk.dir, rev: sk.rev });
+    const items = P.sel.map((s, i) => ({ title: (s.k + 1) + " " + (s.name ? s.short : "अनुसूचि"), area: P.area[i] != null ? fmtD(P.area[i]) : "" }));
+    // layout का item = P.sel का क्रम
+    const head = [(plot.khesra || "").trim() ? "खेसरा " + plot.khesra.trim() : "", D.total != null ? "कुल रकवा " + fmtD(D.total) + (D.basis === "n" ? " (नक्शा)" : "") : ""].filter(Boolean).join(" · ");
+    sk.size = PlotSketch.draw(out, det, sk.lay, { head, items: P.sel.length ? items : [] });
+    sk.parts = P; sk.data = D; sk.built = true; $("#skApply").disabled = false;
+    msg.innerHTML = (det.warn || []).map((t) => '<div class="note">⚠ ' + h(t) + "</div>").join("") + (!P.sel.length ? '<div class="note">कोई अनुसूचि ✓ नहीं है — सिर्फ़ अलग किया हुआ प्लॉट बनेगा, बँटवारा नहीं।</div>' : "") + (det.how === "auto" ? '<div class="note ok">लाल घेरे वाला प्लॉट अपने-आप पहचाना गया। सही न हो तो फोटो में सही प्लॉट के अंदर टैप करें।</div>' : '<div class="note ok">आपके टैप किए हुए प्लॉट से स्केच बना है।</div>');
+  }
+  function skApply() {
+    if (!sk.built) return;
+    const plot = state.groups[sk.gi].plots[sk.pi], out = $("#skOut");
+    plot.abhi_img = { d: out.toDataURL("image/jpeg", 0.9), w: out.width, h: out.height };
+    plot.abhi_cfg = { dir: sk.dir, rev: sk.rev, tol: sk.tol, picks: sk.picks.slice(), seed: sk.seed ? { fx: sk.seed.x / sk.img.w, fy: sk.seed.y / sk.img.h } : null };
+    ui.pick[sk.key] = sk.picks.slice();
+    if (sk.fill && sk.parts && sk.parts.sel.length) {
+      const D = sk.data, P = sk.parts, kT = D.kT, nT = D.nT; let last = -1;
+      P.sel.forEach((s, i) => { if (!s.share) last = i; });
+      P.sel.forEach((s, i) => {
+        if (s.share) return; const f = P.w[i] / P.sum;
+        let kv = kT != null ? Math.round(f * kT * 100) / 100 : null, nv = nT != null ? Math.round(f * nT * 100) / 100 : null;
+        if (i === last) { // आख़िरी खाली हिस्से में बाकी बचा रकवा, ताकि जोड़ ठीक कुल के बराबर हो
+          const kO = plot.sch.reduce((a, x, q) => a + (q === s.k ? 0 : toD(x.k_ac, x.k_dc) || 0), 0), nO = plot.sch.reduce((a, x, q) => a + (q === s.k ? 0 : toD(x.n_ac, x.n_dc) || 0), 0);
+          if (kT != null) kv = Math.max(0, Math.round((kT - kO) * 100) / 100); if (nT != null) nv = Math.max(0, Math.round((nT - nO) * 100) / 100);
+        }
+        setShare(plot, s.k, kv, nv);
+      });
+    }
+    skClose(); save(); render(); toast("स्केच अभियुक्ति में लग गया।");
+  }
+
   /* ---------- events ---------- */
   document.addEventListener("input", (e) => {
     const p = e.target && e.target.dataset && e.target.dataset.p;
@@ -493,7 +638,7 @@
   }
   document.addEventListener("change", (e) => {
     const tg = e.target;
-    if (tg && tg.dataset && tg.dataset.abhi) { const [g, p] = tg.dataset.abhi.split("-").map(Number); const f = tg.files && tg.files[0]; tg.value = ""; loadAbhiImage(f, g, p); return; }
+    if (tg && tg.dataset && tg.dataset.abhi) { const [g, p] = tg.dataset.abhi.split("-").map(Number); const f = tg.files && tg.files[0]; const raw = tg.dataset.mode === "raw"; tg.value = ""; if (raw || !window.PlotSketch) loadAbhiImage(f, g, p); else loadSketchImage(f, g, p); return; }
     if (tg && tg.dataset && tg.dataset.pick) { const [g, p, k] = tg.dataset.pick.split("-").map(Number); pickOf(g, p)[k] = tg.checked; return; }
     if (tg && tg.dataset && tg.dataset.chk) { setP(tg.dataset.chk, tg.checked); save(); if (ui.step === 3) render(); return; }
     const p = e.target && e.target.dataset && e.target.dataset.p;
@@ -510,6 +655,7 @@
     else if (act === "toggleGroup") { ui.openGroup = ui.openGroup === gi ? -1 : gi; render(); }
     else if (act === "togglePlot") { ui.openPlot[gi] = ui.openPlot[gi] === pi ? -1 : pi; render(); }
     else if (act === "splitEq") splitEqual(gi, pi);
+    else if (act === "sketchEdit") openSketch(gi, pi);
     else if (act === "abhiDel") { state.groups[gi].plots[pi].abhi_img = null; save(); render(); }
     else if (act === "restFill") fillRest(gi, pi, s);
     else if (act === "addGroup") { state.groups.push(blankGroup(n)); ui.openGroup = state.groups.length - 1; ui.openPlot[ui.openGroup] = 0; save(); render(); }
