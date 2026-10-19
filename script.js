@@ -490,9 +490,10 @@
   // फॉर्म से अपने-आप: खेसरा नं॰, कुल रकवा, कौन-कौन से हिस्से, किसका कितना रकवा
   function skData() {
     const plot = state.groups[sk.gi].plots[sk.pi], kT = toD(plot.k_ac, plot.k_dc), nT = toD(plot.n_ac, plot.n_dc);
-    const basis = kT != null ? "k" : nT != null ? "n" : null, total = basis === "k" ? kT : basis === "n" ? nT : null;
+    // बँटवारा नक्शा रकवा के हिसाब से; नक्शा रकवा बिल्कुल न भरा हो तभी खतियानी (fallback)
+    const basis = nT != null ? "n" : kT != null ? "k" : null, total = basis === "n" ? nT : basis === "k" ? kT : null;
     const items = state.schedules.map((sc, k) => {
-      const x = plot.sch[k], share = basis === "k" ? toD(x.k_ac, x.k_dc) : basis === "n" ? toD(x.n_ac, x.n_dc) : null;
+      const x = plot.sch[k], share = basis === "n" ? toD(x.n_ac, x.n_dc) : basis === "k" ? toD(x.k_ac, x.k_dc) : null;
       const nm = (sc.name || "").trim();
       return { k, name: nm, short: nm ? nm.split(/\s+/)[0].slice(0, 12) : "अनुसूचि", share: share > 0 ? share : null };
     });
@@ -521,7 +522,7 @@
       '<div class="fld"><span>रंग की सहनशीलता <i id="skTolV"></i></span><input type="range" id="skTol" min="12" max="80" step="2"></div></div>' +
       '<label class="chk"><input type="checkbox" id="skRev"> हिस्सों का क्रम उलटा करें (दाएँ↔बाएँ / ऊपर↔नीचे)</label>' +
       '<label class="chk"><input type="checkbox" id="skFill"> जिन हिस्सों का रकवा खाली है, उनमें अनुपात से रकवा फॉर्म में भी भर दो</label></div>' +
-      '<div class="sk-note">रेखाएँ रकवा के <b>अनुपात</b> में खींची जाती हैं। यह अनुमानित नक्शा है, असली नाप (अमीन की नापी) नहीं — बराबर रकवा का दावा नहीं।</div></div>' +
+      '<div class="sk-note">रेखाएँ <b>नक्शा रकवा</b> के अनुपात में खींची जाती हैं (नक्शा रकवा खाली हो तभी खतियानी)। यह अनुमानित नक्शा है, असली नाप (अमीन की नापी) नहीं — बराबर रकवा का दावा नहीं।</div></div>' +
       '<div class="modal-f split"><button type="button" class="btn soft sm" id="skAuto">↺ स्वतः पहचान</button><span><button type="button" class="btn ghost sm" id="skCancel">रद्द</button> <button type="button" class="btn primary" id="skApply">✓ यह स्केच लगाओ</button></span></div></div>';
     document.body.appendChild(m);
     m.addEventListener("click", (e) => { if (e.target.id === "skModal" || e.target.id === "skClose" || e.target.id === "skCancel") skClose(); });
@@ -562,7 +563,7 @@
     const D = skData(), P = skParts(D), msg = $("#skMsg"), src = $("#skSrc"), out = $("#skOut");
     // जानकारी (अपने-आप)
     const plot = D.plot, noTxt = (plot.khesra || "").trim() ? "खेसरा <b>" + h(plot.khesra) + "</b>" : '<span class="bad">खेसरा नं॰ खाली है</span>';
-    const totTxt = D.total != null ? "कुल रकवा (" + (D.basis === "k" ? "खतियानी" : "नक्शा") + ") <b>" + fmtD(D.total) + "</b>" : '<span class="bad">कुल रकवा खाली है</span>';
+    const totTxt = D.total != null ? "कुल रकवा (" + (D.basis === "n" ? "नक्शा" : "खतियानी — नक्शा रकवा खाली है") + ") <b>" + fmtD(D.total) + "</b>" : '<span class="bad">कुल रकवा खाली है</span>';
     $("#skInfo").innerHTML = "<span>" + noTxt + "</span><span>" + totTxt + "</span><span>हिस्से <b>" + P.sel.length + "</b></span>";
     $("#skPicks").innerHTML = D.items.map((it) => '<label class="sk-pick"><input type="checkbox" data-skpick="' + it.k + '"' + (sk.picks[it.k] ? " checked" : "") + '> <b>' + (it.k + 1) + "</b> " + (it.name ? h(it.name) : "अनुसूचि " + (it.k + 1)) + (it.share ? " <small>" + fmtD(it.share) + "</small>" : "") + "</label>").join("");
     if (redetect || !sk.det) sk.det = PlotSketch.detect(sk.img, { seed: sk.seed, tol: sk.tol });
@@ -582,7 +583,7 @@
     sk.lay = PlotSketch.layout(det, { weights, dir: sk.dir, rev: sk.rev });
     const items = P.sel.map((s, i) => ({ title: (s.k + 1) + " " + (s.name ? s.short : "अनुसूचि"), area: P.area[i] != null ? fmtD(P.area[i]) : "" }));
     // layout का item = P.sel का क्रम
-    const head = [(plot.khesra || "").trim() ? "खेसरा " + plot.khesra.trim() : "", D.total != null ? "कुल रकवा " + fmtD(D.total) + (D.basis === "n" ? " (नक्शा)" : "") : ""].filter(Boolean).join(" · ");
+    const head = [(plot.khesra || "").trim() ? "खेसरा " + plot.khesra.trim() : "", D.total != null ? "कुल रकवा " + fmtD(D.total) + (D.basis === "n" ? " (नक्शा)" : " (खतियानी)") : ""].filter(Boolean).join(" · ");
     sk.size = PlotSketch.draw(out, det, sk.lay, { head, items: P.sel.length ? items : [] });
     sk.parts = P; sk.data = D; sk.built = true; $("#skApply").disabled = false;
     msg.innerHTML = (det.warn || []).map((t) => '<div class="note">⚠ ' + h(t) + "</div>").join("") + (!P.sel.length ? '<div class="note">कोई अनुसूचि ✓ नहीं है — सिर्फ़ अलग किया हुआ प्लॉट बनेगा, बँटवारा नहीं।</div>' : "") + (det.how === "auto" ? '<div class="note ok">लाल घेरे वाला प्लॉट अपने-आप पहचाना गया। सही न हो तो फोटो में सही प्लॉट के अंदर टैप करें।</div>' : '<div class="note ok">आपके टैप किए हुए प्लॉट से स्केच बना है।</div>');
