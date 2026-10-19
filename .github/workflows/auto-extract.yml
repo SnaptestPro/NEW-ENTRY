@@ -1,0 +1,43 @@
+name: Auto extract zip
+
+# Repo me koi .zip upload karo (root me ya upload/ folder me) -> ye khud extract karke files lagा dega
+on:
+  push:
+    paths:
+      - "*.zip"
+      - "upload/*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zip extract karke files root me lagao
+        run: |
+          shopt -s nullglob
+          zips=(*.zip upload/*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then echo "Koi zip nahi mili"; exit 0; fi
+          for z in "${zips[@]}"; do
+            echo "Extract: $z"
+            tmp=$(mktemp -d)
+            unzip -q -o "$z" -d "$tmp"
+            # jis folder me index.html hai wahi asli project folder hai
+            src=$(dirname "$(find "$tmp" -name index.html -not -path '*/__MACOSX/*' | head -n 1)")
+            if [ -z "$src" ] || [ "$src" = "." ]; then echo "index.html nahi mili: $z"; exit 1; fi
+            cp -a "$src"/. ./
+            git rm -q -f "$z"
+          done
+
+      - name: Commit aur push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Kuch badla nahi"; exit 0; fi
+          git commit -m "Auto: zip extract karke files update"
+          git push
