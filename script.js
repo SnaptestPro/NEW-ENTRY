@@ -55,6 +55,7 @@
         r.sch = Array.isArray(r.sch) ? r.sch : [];
         while (r.sch.length < st.schedules.length) r.sch.push(blankSch());
         r.sch.length = st.schedules.length;
+        r.sch.forEach((x) => { if (!String(x.khata || "").trim() && r.khata) x.khata = r.khata; if (!String(x.khesra || "").trim() && r.khesra) x.khesra = r.khesra; });
       });
     });
     return st;
@@ -612,7 +613,17 @@
   document.addEventListener("input", (e) => {
     const p = e.target && e.target.dataset && e.target.dataset.p;
     if (!p || !/\./.test(p)) return;
+    const mk = /^groups\.(\d+)\.plots\.(\d+)\.(khata|khesra)$/.exec(p), oldV = mk ? String(getP(p) || "") : "";
     setP(p, e.target.value);
+    if (mk) {   // ऊपर की पंक्ति का खाता / खेसरा → सभी हिस्सेदार के खाने में अपने-आप (जहाँ खाली है या पहले वही भरा था)
+      const pl = state.groups[mk[1]].plots[mk[2]];
+      pl.sch.forEach((x, k) => {
+        if (!String(x[mk[3]] || "").trim() || String(x[mk[3]]) === oldV) {
+          x[mk[3]] = e.target.value;
+          const el = document.querySelector('[data-p="groups.' + mk[1] + ".plots." + mk[2] + ".sch." + k + "." + mk[3] + '"]'); if (el) el.value = e.target.value;
+        }
+      });
+    }
     save(); updateLive();
   });
   // फोटो को छोटा करके (अधिकतम 800px, JPEG) रखना — ताकि browser की जगह और DOCX दोनों हल्के रहें

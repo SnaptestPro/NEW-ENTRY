@@ -77,7 +77,7 @@
           sch: Array.from({ length: n }, (_, s) => {
             const x = (p.sch && p.sch[s]) || {};
             const has = !!(rk(x.k_ac, x.k_dc) || rk(x.n_ac, x.n_dc));   // हिस्सा है तो ऊपर वाली पंक्ति का खाता/खेसरा अपने-आप
-            return { khata: t(x.khata) || (has ? t(p.khata) : ""), khesra: t(x.khesra) || (has ? t(p.khesra) : ""), k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), kd: toDec(x.k_ac, x.k_dc), nd: toDec(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
+            return { khata: has ? t(x.khata) || t(p.khata) : "", khesra: has ? t(x.khesra) || t(p.khesra) : "", k: rk(x.k_ac, x.k_dc), n: rk(x.n_ac, x.n_dc), kd: toDec(x.k_ac, x.k_dc), nd: toDec(x.n_ac, x.n_dc), min_janib: t(x.min_janib), ch: chauLines(x) };
           })
         });
       });
