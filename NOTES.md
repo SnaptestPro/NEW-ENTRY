@@ -27,3 +27,4 @@ Files: `index.html`, `style.css`, `script.js` — teeno me changes hain. `node -
 - Custom में हाथ से खींची रेखा का नक्शा-अनुपात रकवा-अनुपात से कितना मेल खाता है, नीचे चिप्स में दिखता है (4% से ज़्यादा फ़र्क़ हो तो नारंगी)।
 - `plot.abhi_cfg` में अब `angle`, `lines`, `assign` भी सेव होते हैं।
 - बदली फाइलें: `plotsketch.js` (`customLayout`, `cellKey`, angle दिशा, draw में custom), `script.js` (modal UI, pointer events), `style.css` (अंत में).
+- (v4.1) Custom में एक ही अनुसूचि के कई पास-पास हिस्से अपने-आप एक हो जाते हैं: बीच की रेखा नहीं दिखती और नाम + रकवा सबसे बड़े हिस्से में सिर्फ़ एक बार लिखा जाता है।

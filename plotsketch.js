@@ -432,9 +432,30 @@
       });
       ctx.save(); polyPath(); ctx.clip();
       ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.setLineDash([9, 5]);
-      lay.lines.forEach((L) => {
+      const itemOf = {}; lay.cells.forEach((q) => { itemOf[q.key] = q.item; });
+      const nl = lay.lines.length;
+      lay.lines.forEach((L, i) => {
         const dx = L[2] - L[0], dy = L[3] - L[1], len = Math.hypot(dx, dy) || 1, ex = dx / len, ey = dy / len;
-        ctx.beginPath(); ctx.moveTo(X(L[0] - ex * BIG), Y(L[1] - ey * BIG)); ctx.lineTo(X(L[0] + ex * BIG), Y(L[1] + ey * BIG)); ctx.stroke();
+        // दूसरी रेखाओं से कटने के बिंदु → रेखा के टुकड़े
+        const ts = [-BIG, BIG];
+        lay.lines.forEach((M, j) => {
+          if (j === i) return;
+          const mx = M[2] - M[0], my = M[3] - M[1], den = ex * my - ey * mx; if (Math.abs(den) < 1e-9) return;
+          const t = ((M[0] - L[0]) * my - (M[1] - L[1]) * mx) / den; if (t > -BIG && t < BIG) ts.push(t);
+        });
+        ts.sort((a, b) => a - b);
+        for (let k = 0; k + 1 < ts.length; k++) {
+          const t0 = ts[k], t1 = ts[k + 1], tm = (t0 + t1) / 2, px = L[0] + ex * tm, py = L[1] + ey * tm;
+          const bits = []; for (let j = 0; j < nl; j++) bits.push(j === i ? 0 : sideOf(lay.lines[j], px, py));
+          const k0 = bits.join(""); bits[i] = 1; const k1 = bits.join("");
+          const a = itemOf[k0], b = itemOf[k1];
+          if (a !== undefined && a >= 0 && a === b) {                  // दोनों तरफ़ एक ही अनुसूचि — बीच की रेखा नहीं, जोड़ की बारीक सीवन भी रंग से ढक दो
+            ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 3; ctx.strokeStyle = COLORS[a % COLORS.length];
+            ctx.beginPath(); ctx.moveTo(X(L[0] + ex * t0), Y(L[1] + ey * t0)); ctx.lineTo(X(L[0] + ex * t1), Y(L[1] + ey * t1)); ctx.stroke(); ctx.restore();
+            continue;
+          }
+          ctx.beginPath(); ctx.moveTo(X(L[0] + ex * t0), Y(L[1] + ey * t0)); ctx.lineTo(X(L[0] + ex * t1), Y(L[1] + ey * t1)); ctx.stroke();
+        }
       });
       ctx.restore(); ctx.setLineDash([]);
     } else {
@@ -457,7 +478,9 @@
     polyPath(); ctx.strokeStyle = "#111"; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.stroke();
     // नाम + रकवा
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const bestPart = {}; lay.parts.forEach((p) => { const b = bestPart[p.item]; if (!b || p.frac > b.frac) bestPart[p.item] = p; });
     lay.parts.forEach((p, s) => {
+      if (bestPart[p.item] !== p) return;                             // एक ही आदमी के कई हिस्से हों तो नाम बस एक बार
       const it = (info.items && info.items[p.item]) || {}, lines = [it.title, it.area].filter((x) => x);
       if (!lines.length) return;
       const r = p.pr * S, cx = X(p.px), cy = Y(p.py);
