@@ -274,6 +274,60 @@
     return { ok: true, w, h, mask: pm, poly, bbox: { x0, y0, x1, y1 }, area: pa, frac: pa / N, color, how, warn };
   };
 
+  /* हिस्से का "सबसे चौड़ा" बिंदु (नाम लिखने के लिए): q = {n,x0,y0,x1,y1}, pid[...] === id वाले पिक्सल */
+  function labelOf(q, pid, id, w, h, mx, my) {
+    let px = mx, py = my, pr = 1;
+    if (q.n) {
+      const bw2 = q.x1 - q.x0 + 3, bh2 = q.y1 - q.y0 + 3, D = new Float32Array(bw2 * bh2), BIG = 1e6;
+      for (let y = 0; y < bh2; y++) for (let x = 0; x < bw2; x++) {
+        const gx = q.x0 - 1 + x, gy = q.y0 - 1 + y;
+        D[y * bw2 + x] = gx >= 0 && gy >= 0 && gx < w && gy < h && pid[gy * w + gx] === id ? BIG : 0;
+      }
+      for (let y = 1; y < bh2 - 1; y++) for (let x = 1; x < bw2 - 1; x++) { const i = y * bw2 + x; if (D[i]) D[i] = Math.min(D[i], D[i - 1] + 3, D[i - bw2] + 3, D[i - bw2 - 1] + 4, D[i - bw2 + 1] + 4); }
+      let bestD = -1;
+      for (let y = bh2 - 2; y >= 1; y--) for (let x = bw2 - 2; x >= 1; x--) {
+        const i = y * bw2 + x; if (D[i]) { D[i] = Math.min(D[i], D[i + 1] + 3, D[i + bw2] + 3, D[i + bw2 + 1] + 4, D[i + bw2 - 1] + 4); if (D[i] > bestD) { bestD = D[i]; px = q.x0 - 1 + x + 0.5; py = q.y0 - 1 + y + 0.5; } }
+      }
+      pr = Math.max(1, bestD / 3);
+    }
+    return { px, py, pr };
+  }
+
+  /* ---------- Custom कटाव: हाथ से खींची सीधी रेखाएँ ----------
+     lines[i] = [x1, y1, x2, y2] (फोटो-विश्लेषण वाले पिक्सल में). हर रेखा पूरे प्लॉट को दो हिस्सों में काटती है
+     (रेखा दोनों तरफ़ अनंत तक बढ़ी मानी जाती है); सारी रेखाओं से बने खाने (cells) ही हिस्से हैं। */
+  const sideOf = (L, x, y) => (((L[2] - L[0]) * (y - L[1]) - (L[3] - L[1]) * (x - L[0])) >= 0 ? 1 : 0);
+  const maskKey = (mask, nl) => { let k = ""; for (let i = 0; i < nl; i++) k += (mask >> i) & 1; return k; };
+  PS.cellKey = function (lines, x, y) { let m = 0; for (let i = 0; i < lines.length; i++) m |= sideOf(lines[i], x, y) << i; return maskKey(m, lines.length); };
+
+  function customLayout(det, o, B) {
+    const w = det.w, h = det.h, m = det.mask, lines = (o.lines || []).slice(0, 8), nl = lines.length, n = B.n, u = B.u;
+    const idOf = new Map(), cells = [], pid = new Uint16Array(w * h);
+    for (let y = det.bbox.y0; y <= det.bbox.y1; y++) for (let x = det.bbox.x0; x <= det.bbox.x1; x++) if (m[y * w + x]) {
+      let mk = 0; for (let i = 0; i < nl; i++) mk |= sideOf(lines[i], x + 0.5, y + 0.5) << i;
+      let id = idOf.get(mk);
+      if (id === undefined) { id = cells.length + 1; idOf.set(mk, id); cells.push({ key: maskKey(mk, nl), n: 0, x0: w, y0: h, x1: -1, y1: -1, ts: 0 }); }
+      pid[y * w + x] = id;
+      const q = cells[id - 1]; q.n++; q.ts += (x + 0.5) * u[0] + (y + 0.5) * u[1];
+      if (x < q.x0) q.x0 = x; if (x > q.x1) q.x1 = x; if (y < q.y0) q.y0 = y; if (y > q.y1) q.y1 = y;
+    }
+    // किस खाने में कौन-सी अनुसूचि: जो हाथ से चुनी (assign) वह वही; बाकी में बड़े खाने क्रम से
+    const assign = o.assign || {}, used = new Set();
+    cells.forEach((q) => { const a = assign[q.key]; if (a !== undefined) { q.fixed = true; q.item = a >= 0 && a < n ? a : -1; if (q.item >= 0) used.add(q.item); } });
+    const freeItems = []; for (let i = 0; i < n; i++) if (!used.has(i)) freeItems.push(i);
+    const free = cells.filter((q) => !q.fixed).sort((a, b) => b.n - a.n).slice(0, freeItems.length);
+    free.sort((a, b) => a.ts / a.n - b.ts / b.n); if (o.rev) free.reverse();
+    cells.forEach((q) => { if (!q.fixed) q.item = -1; });
+    free.forEach((q, i) => { q.item = freeItems[i]; });
+    const parts = [];
+    cells.forEach((q, i) => {
+      const L = labelOf(q, pid, i + 1, w, h, B.mx, B.my);
+      q.frac = q.n / B.c; q.px = L.px; q.py = L.py; q.pr = L.pr;
+      if (q.item >= 0) parts.push({ slot: i, item: q.item, frac: q.frac, wfrac: B.wts[q.item] / B.sumW, px: q.px, py: q.py, pr: q.pr });
+    });
+    return { custom: true, lines, cells, parts, n, u, v: [-u[1], u[0]], cuts: [], tmin: 0, tmax: 0, dir: "custom", elong: B.elong, angle: 0 };
+  }
+
   /* ==========================================================
      2. बँटवारा — det = detect() का नतीजा
      o.weights = हिस्सों का अनुपात (रकवा), o.dir = auto | v | h | long, o.rev = क्रम उलटा
@@ -296,6 +350,7 @@
     if (dir === "v") u = [1, 0];
     else if (dir === "h") u = [0, 1];
     else if (dir === "long") u = [Math.cos(th), Math.sin(th)];
+    else if (dir === "angle") { const a = (o.angle || 0) * Math.PI / 180; u = [-Math.sin(a), Math.cos(a)]; }   // angle = रेखाओं की अपनी दिशा (0° आड़ी, 90° खड़ी)
     else {
       const deg = Math.abs(th * 180 / Math.PI);                       // 0..90
       if (elong < 1.2) u = [1, 0];                                    // लगभग चौकोर — खड़ी रेखाएँ
@@ -305,6 +360,7 @@
     }
     if (u[0] < -1e-9 || (Math.abs(u[0]) < 1e-9 && u[1] < 0)) u = [-u[0], -u[1]];
     const v = [-u[1], u[0]];
+    if (dir === "custom") return customLayout(det, o, { u, mx, my, c, n, wts, sumW, elong });
 
     // t = बिंदु का u-अक्ष पर मान; उसका histogram → रकवा के अनुपात पर कटाव
     const ts = new Float32Array(c); let k = 0, tmin = 1e9, tmax = -1e9;
@@ -330,21 +386,8 @@
     }
     const parts = [];
     for (let s = 0; s < n; s++) {
-      const q = st[s]; let px = mx, py = my, pr = 1;
-      if (q.n) {
-        const bw2 = q.x1 - q.x0 + 3, bh2 = q.y1 - q.y0 + 3, D = new Float32Array(bw2 * bh2), BIG = 1e6;
-        for (let y = 0; y < bh2; y++) for (let x = 0; x < bw2; x++) {
-          const gx = q.x0 - 1 + x, gy = q.y0 - 1 + y;
-          D[y * bw2 + x] = gx >= 0 && gy >= 0 && gx < w && gy < h && pid[gy * w + gx] === s + 1 ? BIG : 0;
-        }
-        for (let y = 1; y < bh2 - 1; y++) for (let x = 1; x < bw2 - 1; x++) { const i = y * bw2 + x; if (D[i]) D[i] = Math.min(D[i], D[i - 1] + 3, D[i - bw2] + 3, D[i - bw2 - 1] + 4, D[i - bw2 + 1] + 4); }
-        let bestD = -1;
-        for (let y = bh2 - 2; y >= 1; y--) for (let x = bw2 - 2; x >= 1; x--) {
-          const i = y * bw2 + x; if (D[i]) { D[i] = Math.min(D[i], D[i + 1] + 3, D[i + bw2] + 3, D[i + bw2 + 1] + 4, D[i + bw2 - 1] + 4); if (D[i] > bestD) { bestD = D[i]; px = q.x0 - 1 + x + 0.5; py = q.y0 - 1 + y + 0.5; } }
-        }
-        pr = Math.max(1, bestD / 3);
-      }
-      parts.push({ slot: s, item: order[s], frac: q.n / c, wfrac: wts[order[s]] / sumW, px, py, pr });
+      const q = st[s], L = labelOf(q, pid, s + 1, w, h, mx, my);
+      parts.push({ slot: s, item: order[s], frac: q.n / c, wfrac: wts[order[s]] / sumW, px: L.px, py: L.py, pr: L.pr });
     }
     return { u, v, cuts, tmin, tmax, parts, n, dir, elong, angle: Math.atan2(u[1], u[0]) * 180 / Math.PI };
   };
@@ -374,6 +417,27 @@
       const tw = ctx.measureText(info.head).width; if (tw > W - 24) { fs = Math.max(11, fs * (W - 24) / tw); ctx.font = "700 " + fs + "px " + FONT; }
       ctx.fillText(info.head, W / 2, headH / 2 + 8);
     }
+    if (lay.custom) {
+      const half = (L, bit) => {   // रेखा L की एक तरफ़ का बहुत बड़ा आयत (bit=1: जहाँ cross >= 0)
+        const dx = L[2] - L[0], dy = L[3] - L[1], len = Math.hypot(dx, dy) || 1, ex = dx / len, ey = dy / len, sg = bit ? 1 : -1, nx = -ey * sg, ny = ex * sg;
+        const A = [L[0] - ex * BIG, L[1] - ey * BIG], B = [L[0] + ex * BIG, L[1] + ey * BIG];
+        ctx.beginPath(); ctx.moveTo(X(A[0]), Y(A[1])); ctx.lineTo(X(B[0]), Y(B[1]));
+        ctx.lineTo(X(B[0] + nx * BIG), Y(B[1] + ny * BIG)); ctx.lineTo(X(A[0] + nx * BIG), Y(A[1] + ny * BIG)); ctx.closePath();
+      };
+      lay.cells.forEach((q) => {
+        ctx.save(); polyPath(); ctx.clip();
+        lay.lines.forEach((L, i) => { half(L, q.key.charAt(i) === "1"); ctx.clip(); });
+        ctx.fillStyle = q.item >= 0 ? COLORS[q.item % COLORS.length] : "#ececec"; ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      });
+      ctx.save(); polyPath(); ctx.clip();
+      ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.setLineDash([9, 5]);
+      lay.lines.forEach((L) => {
+        const dx = L[2] - L[0], dy = L[3] - L[1], len = Math.hypot(dx, dy) || 1, ex = dx / len, ey = dy / len;
+        ctx.beginPath(); ctx.moveTo(X(L[0] - ex * BIG), Y(L[1] - ey * BIG)); ctx.lineTo(X(L[0] + ex * BIG), Y(L[1] + ey * BIG)); ctx.stroke();
+      });
+      ctx.restore(); ctx.setLineDash([]);
+    } else {
     // हिस्सों के रंग (प्लॉट की सीमा के अंदर clip करके)
     for (let s = 0; s < lay.n; s++) {
       const ta = s === 0 ? lay.tmin - BIG : lay.cuts[s - 1], tb = s === lay.n - 1 ? lay.tmax + BIG : lay.cuts[s];
@@ -388,6 +452,7 @@
     ctx.strokeStyle = "#333"; ctx.lineWidth = 2; ctx.setLineDash([9, 5]);
     lay.cuts.forEach((t) => { const p = edge(t, -1), q = edge(t, 1); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); });
     ctx.restore(); ctx.setLineDash([]);
+    }
     // बाहरी सीमा
     polyPath(); ctx.strokeStyle = "#111"; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.stroke();
     // नाम + रकवा
@@ -407,7 +472,7 @@
         ctx.fillStyle = "#111"; ctx.fillText(t, cx, top + i * lh);
       });
     });
-    return { w: W, h: H, scale: S };
+    return { w: W, h: H, scale: S, ox, oy };
   };
 
   // एक कदम में: पहचान + बँटवारा + चित्र

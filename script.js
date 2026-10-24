@@ -467,7 +467,7 @@
   function go(i) { ui.step = Math.max(0, Math.min(STEPS.length - 1, i)); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 
   /* ---------- ऑटो स्केच: नक्शे की फोटो → सिर्फ़ चुना हुआ प्लॉट, हिस्सों में बँटा (plotsketch.js) ---------- */
-  const sk = { gi: 0, pi: 0, key: "", cv: null, img: null, seed: null, tol: 34, dir: "auto", rev: false, picks: [], fill: false, det: null, lay: null, built: false };
+  const sk = { gi: 0, pi: 0, key: "", cv: null, img: null, seed: null, tol: 34, dir: "auto", rev: false, angle: 45, lines: [], assign: {}, snap: false, tmp: null, size: null, picks: [], fill: false, det: null, lay: null, built: false };
   function skAnalysisCanvas(im) {
     const MAXD = 640, k = Math.min(1, MAXD / Math.max(im.naturalWidth, im.naturalHeight));
     const w = Math.max(1, Math.round(im.naturalWidth * k)), hh = Math.max(1, Math.round(im.naturalHeight * k));
@@ -518,9 +518,12 @@
       '<div class="sk-views"><div class="sk-v"><div class="sk-cap">1. आपकी फोटो — गलत प्लॉट चुना हो तो <b>सही प्लॉट के अंदर टैप करें</b></div><div class="sk-wrap"><canvas id="skSrc"></canvas></div></div>' +
       '<div class="sk-v"><div class="sk-cap">2. बना हुआ स्केच (सिर्फ़ यही अभियुक्ति में लगेगा)</div><div class="sk-wrap"><canvas id="skOut"></canvas></div></div></div>' +
       '<div class="sk-ctl"><div class="fld"><span>कितने हिस्सों में बँटेगा <i>(✓ वाली अनुसूचियाँ)</i></span><div id="skPicks" class="sk-picks"></div></div>' +
-      '<div class="sk-row"><div class="fld"><span>बँटवारे की रेखाएँ</span><select id="skDir"><option value="auto">अपने-आप (लंबाई के हिसाब से)</option><option value="v">खड़ी रेखाएँ (Vertical)</option><option value="h">आड़ी रेखाएँ (Horizontal)</option><option value="long">प्लॉट की लंबाई के साथ (तिरछी)</option></select></div>' +
+      '<div class="sk-row"><div class="fld"><span>बँटवारे की रेखाएँ</span><select id="skDir"><option value="auto">अपने-आप (लंबाई के हिसाब से)</option><option value="v">खड़ी रेखाएँ (Vertical)</option><option value="h">आड़ी रेखाएँ (Horizontal)</option><option value="long">प्लॉट की लंबाई के साथ (तिरछी)</option><option value="angle">कोई भी कोण (Angle) — रकवा अनुपात में</option><option value="custom">✏️ अपनी रेखा खींचें (Custom)</option></select></div>' +
       '<div class="fld"><span>रंग की सहनशीलता <i id="skTolV"></i></span><input type="range" id="skTol" min="12" max="80" step="2"></div></div>' +
-      '<label class="chk"><input type="checkbox" id="skRev"> हिस्सों का क्रम उलटा करें (दाएँ↔बाएँ / ऊपर↔नीचे)</label>' +
+      '<div class="sk-row" id="skAngRow" hidden><div class="fld"><span>रेखाओं का कोण <i id="skAngV"></i>° &nbsp;(0° = आड़ी, 45° = तिरछी, 90° = खड़ी)</span><input type="range" id="skAng" min="0" max="175" step="5"></div></div>' +
+      '<div class="sk-custom" id="skCustomBar" hidden><div class="sk-hint">👆 <b>नीचे वाले स्केच पर</b> उँगली / माउस से <b>खींचकर</b> रेखा बनाएँ — वह रेखा पूरे प्लॉट को आर-पार काटेगी (अधिकतम 8)। किसी हिस्से पर सिर्फ़ <b>टैप</b> करने से उसमें अगली अनुसूचि का नाम लग जाता है (आख़िर में खाली/भूरा)।</div>' +
+      '<div class="sk-cbtns"><button type="button" class="btn ghost sm" id="skUndo">↶ आख़िरी रेखा हटाएँ</button><button type="button" class="btn ghost sm" id="skClr">✕ सब रेखाएँ हटाएँ</button><label class="chk"><input type="checkbox" id="skSnap"> सीधी (0° / 45° / 90°) पर चिपकाएँ</label></div><div id="skAreaChk" class="sk-areachk"></div></div>' +
+      '<label class="chk" id="skRevL"><input type="checkbox" id="skRev"> हिस्सों का क्रम उलटा करें (दाएँ↔बाएँ / ऊपर↔नीचे)</label>' +
       '<label class="chk"><input type="checkbox" id="skFill"> जिन हिस्सों का रकवा खाली है, उनमें अनुपात से रकवा फॉर्म में भी भर दो</label></div>' +
       '<div class="sk-note">रेखाएँ <b>नक्शा रकवा</b> के अनुपात में खींची जाती हैं (नक्शा रकवा खाली हो तभी खतियानी)। यह अनुमानित नक्शा है, असली नाप (अमीन की नापी) नहीं — बराबर रकवा का दावा नहीं।</div></div>' +
       '<div class="modal-f split"><button type="button" class="btn soft sm" id="skAuto">↺ स्वतः पहचान</button><span><button type="button" class="btn ghost sm" id="skCancel">रद्द</button> <button type="button" class="btn primary" id="skApply">✓ यह स्केच लगाओ</button></span></div></div>';
@@ -529,16 +532,69 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !m.hidden) skClose(); });
     $("#skApply").addEventListener("click", skApply);
     $("#skAuto").addEventListener("click", () => { sk.seed = null; skRefresh(true); });
-    $("#skDir").addEventListener("change", (e) => { sk.dir = e.target.value; skRefresh(false); });
+    $("#skDir").addEventListener("change", (e) => { sk.dir = e.target.value; skSyncUI(); skRefresh(false); });
+    $("#skAng").addEventListener("input", (e) => { sk.angle = Number(e.target.value); $("#skAngV").textContent = sk.angle; skRender(); });
+    $("#skSnap").addEventListener("change", (e) => { sk.snap = e.target.checked; });
+    $("#skUndo").addEventListener("click", () => { sk.lines.pop(); sk.assign = {}; skRender(); });
+    $("#skClr").addEventListener("click", () => { sk.lines = []; sk.assign = {}; skRender(); });
+    skBindDraw($("#skOut"));
     $("#skRev").addEventListener("change", (e) => { sk.rev = e.target.checked; skRefresh(false); });
     $("#skFill").addEventListener("change", (e) => { sk.fill = e.target.checked; });
     let tt; $("#skTol").addEventListener("input", (e) => { sk.tol = Number(e.target.value); $("#skTolV").textContent = sk.tol; clearTimeout(tt); tt = setTimeout(() => skRefresh(true), 160); });
-    $("#skPicks").addEventListener("change", (e) => { const k = e.target.dataset && e.target.dataset.skpick; if (k != null) { sk.picks[Number(k)] = e.target.checked; skRefresh(false); } });
+    $("#skPicks").addEventListener("change", (e) => { const k = e.target.dataset && e.target.dataset.skpick; if (k != null) { sk.picks[Number(k)] = e.target.checked; sk.assign = {}; skRefresh(false); } });
     $("#skSrc").addEventListener("click", (e) => {
       const c = e.currentTarget, r = c.getBoundingClientRect();
       sk.seed = { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height };
       skRefresh(true);
     });
+  }
+  // दिशा के हिसाब से कौन-से नियंत्रण दिखें
+  function skSyncUI() {
+    $("#skAngRow").hidden = sk.dir !== "angle";
+    $("#skCustomBar").hidden = sk.dir !== "custom";
+    const out = $("#skOut"); out.style.touchAction = sk.dir === "custom" ? "none" : ""; out.style.cursor = sk.dir === "custom" ? "crosshair" : "";
+    $("#skAng").value = sk.angle; $("#skAngV").textContent = sk.angle; $("#skSnap").checked = sk.snap;
+  }
+  // आउटपुट स्केच पर रेखा खींचना (drag) / हिस्से पर टैप करके अनुसूचि बदलना
+  function skBindDraw(out) {
+    const toImg = (e) => {
+      const r = out.getBoundingClientRect(), cx = (e.clientX - r.left) * out.width / r.width, cy = (e.clientY - r.top) * out.height / r.height, z = sk.size;
+      return { cx, cy, x: (cx - z.ox) / z.scale, y: (cy - z.oy) / z.scale };
+    };
+    const mkLine = (a, b) => {
+      let bx = b.x, by = b.y;
+      if (sk.snap) { const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy), an = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4); bx = a.x + len * Math.cos(an); by = a.y + len * Math.sin(an); }
+      return [a.x, a.y, bx, by];
+    };
+    let drag = null, raf = 0;
+    out.addEventListener("pointerdown", (e) => {
+      if (sk.dir !== "custom" || !sk.size || !sk.built) return;
+      e.preventDefault(); try { out.setPointerCapture(e.pointerId); } catch (_) {}
+      drag = { a: toImg(e) };
+    });
+    out.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const b = toImg(e); if (Math.hypot(b.cx - drag.a.cx, b.cy - drag.a.cy) < 8) return;
+      sk.tmp = mkLine(drag.a, b);
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; skRender(); });
+    });
+    const finish = (e, cancel) => {
+      if (!drag) return;
+      const a = drag.a, b = toImg(e); drag = null; sk.tmp = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (!cancel && Math.hypot(b.cx - a.cx, b.cy - a.cy) >= 8) {
+        if (sk.lines.length >= 8) toast("अधिकतम 8 रेखाएँ ही खींच सकते हैं।", true);
+        else { sk.lines.push(mkLine(a, b)); sk.assign = {}; }
+      } else if (!cancel && sk.lay && sk.lay.cells) {            // टैप: उस हिस्से की अनुसूचि बदलना
+        const key = PlotSketch.cellKey(sk.lines, a.x, a.y), cell = sk.lay.cells.find((q) => q.key === key);
+        if (cell) {
+          sk.lay.cells.forEach((q) => { if (sk.assign[q.key] === undefined) sk.assign[q.key] = q.item; });
+          const cur = sk.assign[key]; sk.assign[key] = cur + 1 > sk.lay.n - 1 ? -1 : cur + 1;
+        }
+      }
+      skRender();
+    };
+    out.addEventListener("pointerup", (e) => finish(e, false));
+    out.addEventListener("pointercancel", (e) => finish(e, true));
   }
   function skClose() { const m = $("#skModal"); if (m) m.hidden = true; }
   function openSketch(gi, pi, fresh) {
@@ -553,9 +609,11 @@
     const D0 = skData(), eSum = D0.items.reduce((a, it) => a + (it.share || 0), 0);
     const restLeft = D0.total != null && D0.total - eSum > 0.005 && D0.items.some((it) => !it.share);
     sk.picks = cfg && Array.isArray(cfg.picks) && cfg.picks.length === state.schedules.length ? cfg.picks.slice() : restLeft ? state.schedules.map(() => true) : pickOf(gi, pi).slice();
-    sk.dir = cfg ? cfg.dir || "auto" : "auto"; sk.rev = !!(cfg && cfg.rev); sk.tol = cfg && cfg.tol ? cfg.tol : 34; sk.fill = false;
+    sk.dir = cfg ? cfg.dir || "auto" : "auto"; sk.rev = !!(cfg && cfg.rev);
+    sk.angle = cfg && cfg.angle != null ? cfg.angle : 45; sk.assign = cfg && cfg.assign ? Object.assign({}, cfg.assign) : {}; sk.tmp = null;
+    sk.lines = cfg && Array.isArray(cfg.lines) ? cfg.lines.map((L) => [L[0] * cv.width, L[1] * cv.height, L[2] * cv.width, L[3] * cv.height]) : []; sk.tol = cfg && cfg.tol ? cfg.tol : 34; sk.fill = false;
     sk.seed = cfg && cfg.seed ? { x: cfg.seed.fx * cv.width, y: cfg.seed.fy * cv.height } : (fresh ? null : sk.seed);
-    $("#skDir").value = sk.dir; $("#skRev").checked = sk.rev; $("#skFill").checked = false; $("#skTol").value = sk.tol; $("#skTolV").textContent = sk.tol;
+    $("#skDir").value = sk.dir; $("#skRev").checked = sk.rev; $("#skFill").checked = false; $("#skTol").value = sk.tol; $("#skTolV").textContent = sk.tol; skSyncUI();
     $("#skModal").hidden = false;
     skRefresh(true);
   }
@@ -579,20 +637,34 @@
     sk.built = false; $("#skApply").disabled = true;
     if (!det.ok) { msg.innerHTML = '<div class="note err">' + h(det.msg) + "</div>"; out.width = 1; out.height = 1; out.style.display = "none"; return; }
     out.style.display = "";
+    skRender();
+  }
+  function skRender() {
+    const det = sk.det; if (!det || !det.ok) return;
+    const D = skData(), P = skParts(D), plot = D.plot, msg = $("#skMsg"), out = $("#skOut");
     const weights = P.w.length ? P.w : [1];
-    sk.lay = PlotSketch.layout(det, { weights, dir: sk.dir, rev: sk.rev });
+    sk.lay = PlotSketch.layout(det, { weights, dir: sk.dir, rev: sk.rev, angle: sk.angle, lines: sk.lines.concat(sk.tmp ? [sk.tmp] : []), assign: sk.assign });
     const items = P.sel.map((s, i) => ({ title: (s.k + 1) + " " + (s.name ? s.short : "अनुसूचि"), area: P.area[i] != null ? fmtD(P.area[i]) : "" }));
     // layout का item = P.sel का क्रम
     const head = [(plot.khesra || "").trim() ? "खेसरा " + plot.khesra.trim() : "", D.total != null ? "कुल रकवा " + fmtD(D.total) + (D.basis === "n" ? " (नक्शा)" : " (खतियानी)") : ""].filter(Boolean).join(" · ");
     sk.size = PlotSketch.draw(out, det, sk.lay, { head, items: P.sel.length ? items : [] });
     sk.parts = P; sk.data = D; sk.built = true; $("#skApply").disabled = false;
+    // Custom: हाथ से खींची रेखाओं से बने हिस्से का नक्शा-अनुपात, रकवा के अनुपात से कितना मेल खाता है
+    const chk = $("#skAreaChk");
+    if (chk) {
+      if (sk.dir === "custom" && sk.lay.cells) {
+        const got = P.sel.map(() => 0); sk.lay.cells.forEach((q) => { if (q.item >= 0 && q.item < got.length) got[q.item] += q.frac; });
+        const pc = (x) => Math.round(x * 1000) / 10 + "%", gray = sk.lay.cells.filter((q) => q.item < 0).length;
+        chk.innerHTML = (P.sel.length ? P.sel.map((s2, i) => { const need = P.w[i] / P.sum, bad = Math.abs(got[i] - need) > 0.04; return '<span class="' + (bad ? "bad" : "ok") + '">' + (s2.k + 1) + " " + h(s2.name ? s2.short : "अनुसूचि") + " — रकवा के हिसाब से " + pc(need) + " · स्केच में " + pc(got[i]) + "</span>"; }).join("") : "") + (gray ? '<span class="bad">' + gray + " हिस्सा बिना अनुसूचि के (भूरा) — टैप करके अनुसूचि लगाएँ</span>" : "");
+      } else chk.innerHTML = "";
+    }
     msg.innerHTML = (det.warn || []).map((t) => '<div class="note">⚠ ' + h(t) + "</div>").join("") + (!P.sel.length ? '<div class="note">कोई अनुसूचि ✓ नहीं है — सिर्फ़ अलग किया हुआ प्लॉट बनेगा, बँटवारा नहीं।</div>' : "") + (det.how === "auto" ? '<div class="note ok">लाल घेरे वाला प्लॉट अपने-आप पहचाना गया। सही न हो तो फोटो में सही प्लॉट के अंदर टैप करें।</div>' : '<div class="note ok">आपके टैप किए हुए प्लॉट से स्केच बना है।</div>');
   }
   function skApply() {
     if (!sk.built) return;
     const plot = state.groups[sk.gi].plots[sk.pi], out = $("#skOut");
     plot.abhi_img = { d: out.toDataURL("image/jpeg", 0.9), w: out.width, h: out.height };
-    plot.abhi_cfg = { dir: sk.dir, rev: sk.rev, tol: sk.tol, picks: sk.picks.slice(), seed: sk.seed ? { fx: sk.seed.x / sk.img.w, fy: sk.seed.y / sk.img.h } : null };
+    plot.abhi_cfg = { dir: sk.dir, rev: sk.rev, tol: sk.tol, angle: sk.angle, lines: sk.lines.map((L) => [L[0] / sk.img.w, L[1] / sk.img.h, L[2] / sk.img.w, L[3] / sk.img.h]), assign: Object.assign({}, sk.assign), picks: sk.picks.slice(), seed: sk.seed ? { fx: sk.seed.x / sk.img.w, fy: sk.seed.y / sk.img.h } : null };
     ui.pick[sk.key] = sk.picks.slice();
     if (sk.fill && sk.parts && sk.parts.sel.length) {
       const D = sk.data, P = sk.parts, kT = D.kT, nT = D.nT; let last = -1;

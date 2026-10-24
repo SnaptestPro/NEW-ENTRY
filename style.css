@@ -460,3 +460,12 @@ table.pv td .pv-img{max-width:100%}
 .note.err{background:#fdecea;border-color:#f2b8b2;color:#8a1c14}
 .note.ok{background:#e9f8f1;border-color:#b7e4cf;color:#13654a}
 @media(max-width:720px){.sk-views,.sk-row{grid-template-columns:1fr}.sk-wrap canvas{max-height:36vh}}
+
+/* ---- स्केच: कोण + Custom रेखाएँ ---- */
+.sk-row[hidden],.sk-custom[hidden],.chk[hidden]{display:none}
+.sk-custom{display:grid;gap:8px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:10px 12px}
+.sk-hint{font-size:13px;color:#334155;line-height:1.5}
+.sk-cbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sk-areachk{display:flex;flex-wrap:wrap;gap:6px}
+.sk-areachk span{font-size:12.5px;border-radius:999px;padding:4px 11px;border:1px solid #d6dcf5;background:#eef2ff;color:var(--navy)}
+.sk-areachk span.bad{background:#fff4e5;border-color:#f3c98b;color:#8a4b00}
